@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "banyan-ingest"
+version = "0.5.0"
+requires-python = ">= 3.10"
+
+dependencies = [
+    "python-pptx",
+    "pandas",
+    "pdf2image"
+    ]
+
+[project.optional-dependencies]
+marker = ["marker-pdf"]
+nemotronparse = ["openai"]

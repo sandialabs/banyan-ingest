@@ -61,10 +61,10 @@ class PptxProcessor(Processor):
 
     def process_document(self, filepath):
         prs = Presentation(filepath)
-        slide_id = 1
         images = []
-        slide_text = []
+        slide_texts = []
         for slide in prs.slides:
+            slide_text = []
             images.append([])
             for shape in slide.shapes:
                 if shape.has_text_frame:
@@ -88,10 +88,10 @@ class PptxProcessor(Processor):
                         if sub_shape.has_text_frame:
                             for par in sub_shape.text_frame.paragraphs:
                                 slide_text.append(par.text)
-            slide_id += 1
+            slide_texts.append("\n".join(slide_text))
 
         metadata = {}
-        return PptxOutput(slide_text, images, metadata)
+        return PptxOutput(slide_texts, images, metadata)
 
     def process_batch_documents(self, filepaths):
         pass

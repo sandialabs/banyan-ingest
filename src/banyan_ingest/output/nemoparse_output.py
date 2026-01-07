@@ -49,7 +49,11 @@ class NemoparseOutput(ModelOutput):
         for image_list in self.images:
             for img in image_list:
                 img_filename = f"{filename_base}_image_{img_index}.png"
-                img.save(os.path.join(output_directory, img_filename))
+                try:
+                    img.save(os.path.join(output_directory, img_filename))
+                except Exception as e:
+                    print(f"An error occurred trying to save the image: {img_filename}: {e}")
+
                 img_index += 1
                 img_filenames.append(img_filename)
 

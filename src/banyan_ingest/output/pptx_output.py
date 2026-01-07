@@ -14,7 +14,7 @@ class PptxOutput(ModelOutput):
     def save_output(self, output_directory, filename_base):
         with open(os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
             for slide_id, slide in enumerate(self.text):
-                f.write(f"# Slide {slide_id}")
+                f.write(f"# Slide {slide_id}\n")
                 f.write(slide)
                 f.write("\n")
 

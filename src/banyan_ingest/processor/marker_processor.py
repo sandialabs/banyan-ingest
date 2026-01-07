@@ -135,7 +135,8 @@ class CustomMarkdownRenderer(MarkdownRenderer):
             sub_symbol="<sub>",
             sup_symbol="<sup>",
             inline_math_delimiters=self.inline_math_delimiters,
-            block_math_delimiters=self.block_math_delimiters
+            block_math_delimiters=self.block_math_delimiters,
+            html_tables_in_markdown=False
         )
 
     def __call__(self, document: Document) -> CustomMarkdownOutput:
@@ -197,10 +198,12 @@ class MarkerProcessor(Processor):
     def process_batch_documents(self, filepaths):
         file_outputs = []
         for filepath in filepaths:
-            try:
-                output = self.process_document(filepath)
-                file_outputs.append(output)
-            except:
-                print("Failed to parse document: {filepath}")
+            output = self.process_document(filepath)
+            file_outputs.append(output)
+            #try:
+            #    output = self.process_document(filepath)
+            #    file_outputs.append(output)
+            #except:
+            #    print(f"Failed to parse document: {filepath}")
 
         return file_outputs

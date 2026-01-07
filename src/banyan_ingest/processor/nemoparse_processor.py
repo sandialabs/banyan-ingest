@@ -13,7 +13,7 @@ from ..output.nemoparse_output import NemoparseData, NemoparseOutput
 
 class NemoparseProcessor(Processor):
     
-    def __init__(self, endpoint_url=""):
+    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse"):
         super().__init__()
         self.model_url = endpoint_url
         self.client = OpenAI(
@@ -22,7 +22,7 @@ class NemoparseProcessor(Processor):
               # varible should be non-empty.
               api_key = "non-empty"
             )
-        self.model="nvidia/nemoretriever-parse"
+        self.model=model_name
 
     def _encode_image(self, image):
         try:

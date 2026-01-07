@@ -1,11 +1,20 @@
-import sys
+import argparse
 
 from banyan_ingest import PptxProcessor
 
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_file", default=None, type=str, help="Path for a single file to be processed")
+    parser.add_argument("output_dir", default=None, type=str, help="Path for output from single or multiple files")
+    parser.add_argument("--output_base", default="banyan-ingest-output", type=str,  help="Base name for output files")
+    return parser.parse_args()
+
 if __name__ == '__main__':
-    filename = sys.argv[1]
-    output_directory = sys.argv[2]
-    output_base = sys.argv[3]
+    args = parse_arguments()
+
+    filename = args.input_file
+    output_directory = args.output_dir
+    output_base = args.output_base
 
     document_processor = PptxProcessor()
     outputs = document_processor.process_document(filename)

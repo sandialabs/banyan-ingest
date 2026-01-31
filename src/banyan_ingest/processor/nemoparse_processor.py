@@ -8,7 +8,7 @@ from openai import OpenAI
 from PIL import Image, ImageDraw
 
 from .processor import Processor
-from ..converter.pdf_to_image import convert_pdf_to_images
+from ..converter.pdf_to_image import convert_pdf_to_images, convert_bytes_to_images
 from ..output.nemoparse_output import NemoparseData, NemoparseOutput
 
 class NemoparseProcessor(Processor):
@@ -109,34 +109,37 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
-    def process_document(self, filepath):
-        # Basic check of file type
+    def get_pages(self, filepath):
         file_pages = []
-        if "png" in filepath:
-            with open(filepath, "rb") as image_file:
-                file_pages.append(image_file.read())
-        elif "pdf" in filepath:
-            images = convert_pdf_to_images(filepath)
+        if isinstance(filepath, io.BytesIO):
+            images = convert_bytes_to_images(filepath.read())
             for image in images:
                 img_byte_arr = io.BytesIO()
                 image.save(img_byte_arr, format='PNG')
                 img_byte_arr = img_byte_arr.getvalue()
                 file_pages.append(img_byte_arr)
         else:
-            try:
+            if "png" in filepath:
+                with open(filepath, "rb") as image_file:
+                    file_pages.append(image_file.read())
+            elif "pdf" in filepath:
                 images = convert_pdf_to_images(filepath)
                 for image in images:
                     img_byte_arr = io.BytesIO()
                     image.save(img_byte_arr, format='PNG')
                     img_byte_arr = img_byte_arr.getvalue()
                     file_pages.append(img_byte_arr)
-            except:
-                raise Exception(f"Unsupported filetype! {filepath}")
-
-        output = NemoparseOutput()
-        for page_image in file_pages:
-            output.add_output(self._process_image(page_image))
-        return output
+            else:
+                try:
+                    images = convert_pdf_to_images(filepath)
+                    for image in images:
+                        img_byte_arr = io.BytesIO()
+                        image.save(img_byte_arr, format='PNG')
+                        img_byte_arr = img_byte_arr.getvalue()
+                        file_pages.append(img_byte_arr)
+                except:
+                    raise Exception(f"Unsupported filetype! {filepath}")
+        return file_pages
 
     def process_batch_documents(self, filepaths):
         file_outputs = []
@@ -145,3 +148,15 @@ class NemoparseProcessor(Processor):
             file_outputs.append(output)
 
         return file_outputs
+
+    def process_page(self, page):
+        return self._process_image(page)
+
+    def process_document(self, filepath):
+        # Basic check of file type
+        file_pages = self.get_pages(filepath) 
+
+        output = NemoparseOutput()
+        for page_image in file_pages:
+            output.add_output(self._process_image(page_image))
+        return output

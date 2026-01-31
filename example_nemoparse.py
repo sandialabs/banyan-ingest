@@ -21,7 +21,7 @@ if __name__ == '__main__':
     endpoint = args.endpoint
 
     if endpoint != "":
-        document_processor = NemoparseProcessor(endpoint_url=endpoint)
+        document_processor = NemoparseProcessor(endpoint_url=endpoint, model_name=args.model_name)
 
         if args.is_input_dir:
             input_directory = args.input_file
@@ -39,8 +39,6 @@ if __name__ == '__main__':
         else:
             filename = args.input_file
             outputs = document_processor.process_document(filename)
-
-            #print(outputs.get_bbox_output(with_bbox_data=False))
 
             outputs.save_output(output_directory, output_base)
     else:

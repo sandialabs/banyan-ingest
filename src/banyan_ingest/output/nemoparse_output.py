@@ -28,14 +28,6 @@ class NemoparseOutput(ModelOutput):
         self.bboxdata: list[str] = []
         self.bbox_image: list[Image] = []
         
-    #def __init__(self, output_data):
-        #super().__init__()
-        #self.text: list[str] = [output_data.text]
-        #self.images: list[list] = [output_data.images]
-        #self.tables: list[list] = [output_data.tables]
-        #self.bboxdata: list[str] = [output_data.bbox_json]
-        #self.bbox_image: list[Image] = [output_data.bbox_image]
-
     def add_output(self, output_data):
         self.text.append(output_data.text)
         self.images.append(output_data.images)

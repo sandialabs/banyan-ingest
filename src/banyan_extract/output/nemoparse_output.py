@@ -117,8 +117,26 @@ class NemoparseOutput(ModelOutput):
 
     def get_output_as_markdown(self):
         full_text = ""
-        for page_text in self.text:
+        for page_number, page_text in enumerate(self.text):
             for text in page_text:
                 full_text += text
             full_text += "\n"
         return full_text
+
+    def get_content_list(self):
+        content = []
+        for page_text in self.text:
+            tmp_data = ""
+            for text in page_text:
+                tmp_data += text
+            content.append(tmp_data)
+        return content
+
+    def get_images(self):
+        images = []
+        for image_list in self.images:
+            for img in image_list:
+                images.append(img)
+        
+        return images
+

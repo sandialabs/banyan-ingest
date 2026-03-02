@@ -1,5 +1,5 @@
 import argparse
-from banyan_ingest import PaperMageProcessor
+from banyan_extract import PaperMageProcessor
 
 def define_parser():
     parser = argparse.ArgumentParser()

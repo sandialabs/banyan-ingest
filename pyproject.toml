@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "banyan-ingest"
+name = "banyan_extract"
 version = "0.5.0"
 requires-python = ">= 3.10"
 

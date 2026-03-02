@@ -1,14 +1,14 @@
 import argparse
 import os
 
-from banyan_ingest import NemoparseProcessor 
+from banyan_extract import NemoparseProcessor 
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument("input_file", default=None, type=str, help="Path for a single file to be processed")
     parser.add_argument("output_dir", default=None, type=str, help="Path for output from single or multiple files")
     parser.add_argument("--is_input_dir", action="store_true",  help="Flags to set input file to directory")
-    parser.add_argument("--output_base", default="banyan-ingest-output", type=str,  help="Base name for output files")
+    parser.add_argument("--output_base", default="banyan-extract-output", type=str,  help="Base name for output files")
     parser.add_argument("--endpoint", default="", type=str, help="Endpoint url for nemoretreiver-parse model")
     return parser.parse_args()
 

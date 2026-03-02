@@ -1,8 +1,8 @@
-# Banyan Ingest
+# Banyan Extract
 
-`banyan_ingest` is a python module that prepares documents for use in GenAI and LLM applications. 
+`banyan_extract` is a python module that prepares documents for use in GenAI and LLM applications. 
 
-Rather than re-invent the wheel, `banyan_ingest` aims to utilize state-of-the-art tools to provide this capability. 
+Rather than re-invent the wheel, `banyan_extract` aims to utilize state-of-the-art tools to provide this capability. 
 
 
 ## Installation

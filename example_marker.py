@@ -2,7 +2,7 @@ import sys
 import os
 import argparse
 
-from banyan_ingest import MarkerProcessor
+from banyan_extract import MarkerProcessor
 
 
 def parse_arguments():
@@ -10,7 +10,7 @@ def parse_arguments():
     parser.add_argument("input_file", default=None, type=str, help="Path for a single file to be processed")
     parser.add_argument("output_dir", default=None, type=str, help="Path for output from single or multiple files")
     parser.add_argument("--is_input_dir", action="store_true",  help="Flags to set input file to directory")
-    parser.add_argument("--output_base", default="banyan-ingest-output", type=str,  help="Base name for output files")
+    parser.add_argument("--output_base", default="banyan-extract-output", type=str,  help="Base name for output files")
     return parser.parse_args()
 
 

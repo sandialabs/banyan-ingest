@@ -3,8 +3,12 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "banyan_extract"
-version = "0.5.0"
+name = "banyan-extract"
+version = "0.5.1"
+license = { text = "BSD 3" }
+authors = [
+    { name="Sandia National Laboratories" },
+]
 requires-python = ">= 3.10"
 
 dependencies = [
@@ -18,3 +22,6 @@ dependencies = [
 marker = ["marker-pdf", "surya-ocr"]
     
 nemotronparse = ["openai"]
+
+[project.scripts]
+banyan-extract = "banyan_extract.cli:main"

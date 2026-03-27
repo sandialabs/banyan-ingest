@@ -3,19 +3,22 @@ Unit tests for NemoparseOutput class.
 
 These tests verify the functionality of the NemoparseOutput class
 without mocking, using real implementations wherever possible.
+
+Dependency Requirements: nemotronparse dependencies (openai) for full testing
 """
 
 import os
-import tempfile
 import json
 from pathlib import Path
 from PIL import Image
 
 import pytest
 
-from banyan_extract.output.nemoparse_output import NemoparseOutput, NemoparseData
+NemoparseOutput = pytest.importorskip("banyan_extract.output.nemoparse_output").NemoparseOutput
+NemoparseData = pytest.importorskip("banyan_extract.output.nemoparse_output").NemoparseData
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseOutputUnit:
     """Unit tests for NemoparseOutput class methods."""
 
@@ -140,6 +143,7 @@ class TestNemoparseOutputUnit:
         assert result[1] == img2
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseOutputEdgeCases:
     """Edge case tests for NemoparseOutput."""
 

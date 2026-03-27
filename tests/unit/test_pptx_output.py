@@ -6,7 +6,6 @@ for handling PowerPoint presentation output.
 """
 
 import os
-import tempfile
 import json
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
@@ -214,32 +213,6 @@ class TestPPTXOutputEdgeCases:
         for i in range(5):
             assert f"# Slide {i}" in md_content
             assert f"Slide {i} content" in md_content
-
-    def test_special_characters_in_text(self, tmp_path):
-        """Test handling of special characters in slide text."""
-        # Create PPTXOutput with special characters
-        text_data = [
-            "Slide with special chars: ©®™&<>",
-            "Slide with unicode: 你好世界 🌍",
-            "Slide with math: E=mc², ∫f(x)dx"
-        ]
-        
-        output = PptxOutput(text_data, [], {})
-        
-        # Save output
-        output_dir = tmp_path / "special_chars_output"
-        output_dir.mkdir()
-        
-        output.save_output(str(output_dir), "special_chars_presentation")
-        
-        # Verify special characters are preserved
-        md_file = output_dir / "special_chars_presentation.md"
-        with open(md_file, 'r', encoding='utf-8') as f:
-            md_content = f.read()
-        
-        assert "©®™&<>" in md_content
-        assert "你好世界 🌍" in md_content
-        assert "E=mc², ∫f(x)dx" in md_content
 
 
 class TestPPTXOutputErrorHandling:

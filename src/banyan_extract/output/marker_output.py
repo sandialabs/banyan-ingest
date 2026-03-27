@@ -1,9 +1,14 @@
 import os
 import json
 
-from marker.settings import settings
-
 from .output import ModelOutput
+
+try:
+    from marker.settings import settings
+except ImportError:
+    # Marker is an optional dependency
+    # This will be handled by the dependency check in tests
+    settings = None
 
 
 class MarkerOutput(ModelOutput):

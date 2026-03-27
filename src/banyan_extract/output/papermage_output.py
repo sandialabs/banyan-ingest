@@ -28,11 +28,12 @@ class PaperMageOutput(ModelOutput):
                 print(f"saving to {save_path}")
                 json.dump(self.output_data.to_json(), f_out, indent=2)
 
-            for option in options:
-                with open(save_path / f"{filename_base}_{option}.txt", "w+") as f:
-                    for elem in self.output_data.get_layer(option):
-                        f.write(''.join((str(elem),'\n')))
-                    f.close()
+            if options:
+                for option in options:
+                    with open(save_path / f"{filename_base}_{option}.txt", "w+") as f:
+                        for elem in self.output_data.get_layer(option):
+                            f.write(''.join((str(elem),'\n')))
+                        f.close()
 
         elif mode == 'extract_batch':
             for filename, extracted in self.output_data.items():
@@ -42,9 +43,10 @@ class PaperMageOutput(ModelOutput):
                 with open(file_path / f"{filename_base}.json", "w+") as f_out:
                     json.dump(extracted.to_json(), f_out, indent=2)
 
-                for option in options:
-                    with open(file_path / f"{option}.txt", "w+") as f:
-                        for elem in extracted.get_layer(option):
-                            f.write(''.join((str(elem),'\n')))
-                        f.close()
+                if options:
+                    for option in options:
+                        with open(file_path / f"{option}.txt", "w+") as f:
+                            for elem in extracted.get_layer(option):
+                                f.write(''.join((str(elem),'\n')))
+                            f.close()
 

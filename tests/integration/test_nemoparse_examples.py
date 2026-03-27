@@ -8,7 +8,6 @@ Generated using AI, reviewed by a human
 """
 
 import os
-import tempfile
 import json
 from pathlib import Path
 from PIL import Image

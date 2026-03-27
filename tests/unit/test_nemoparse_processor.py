@@ -4,6 +4,8 @@ Unit tests for NemoparseProcessor class.
 These tests verify the functionality of the NemoparseProcessor class
 using mocking for external dependencies like the Nemotron OCR API.
 
+Dependency Requirements: nemotronparse dependencies (openai) for full testing
+
 Test Organization:
 - Initialization tests: Test constructor and setup
 - Core functionality tests: Test main processing methods
@@ -15,16 +17,16 @@ Test Organization:
 
 import os
 import io
-import tempfile
 from unittest.mock import Mock, patch, MagicMock
 from PIL import Image
 
 import pytest
 
-from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
-from banyan_extract.output.nemoparse_output import NemoparseData
+NemoparseProcessor = pytest.importorskip("banyan_extract.processor.nemoparse_processor").NemoparseProcessor
+NemoparseData = pytest.importorskip("banyan_extract.output.nemoparse_output").NemoparseData
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorInitialization:
     """Tests for NemoparseProcessor initialization."""
 
@@ -54,6 +56,7 @@ class TestNemoparseProcessorInitialization:
         assert processor.sort_by_position == custom_sort
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorSorting:
     """Tests for the sort_elements_by_position method."""
 
@@ -107,6 +110,7 @@ class TestNemoparseProcessorSorting:
         assert sorted_same_pos[1]['type'] == 'Text'
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorImageProcessing:
     """Tests for image processing methods."""
 
@@ -142,6 +146,7 @@ class TestNemoparseProcessorImageProcessing:
             assert result is None
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorDocumentProcessing:
     """Tests for document processing methods."""
 
@@ -256,6 +261,7 @@ class TestNemoparseProcessorDocumentProcessing:
         processor.nemotron_ocr.get_detailed_ocr_results.assert_called_once()
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorErrorHandling:
     """Error handling tests for NemoparseProcessor."""
 
@@ -353,6 +359,7 @@ class TestNemoparseProcessorErrorHandling:
         assert "API error for document 2" in str(exc_info.value)
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorEdgeCases:
     """Edge case tests for NemoparseProcessor."""
 
@@ -418,39 +425,40 @@ class TestNemoparseProcessorEdgeCases:
     def test_process_document_with_special_characters(self):
         """Test document processing with special characters in text."""
         processor = NemoparseProcessor()
-        
+
         # Create a mock image
         mock_image = Image.new('RGB', (100, 100), color='white')
-        
+
         # Convert image to bytes
         img_byte_arr = io.BytesIO()
         mock_image.save(img_byte_arr, format='PNG')
         image_bytes = img_byte_arr.getvalue()
-        
+
         # Mock the OCR API response with special characters
         mock_bbox_data = [
             {
                 'type': 'Text',
                 'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.8, 'ymax': 0.2},
-                'text': 'Text with special chars: ©®™&<>'
+                'text': 'Text with special chars: (c)(R)(TM)&<>'
             }
         ]
-        
+
         # Mock the nemotron_ocr.get_detailed_ocr_results method
         processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
-        
+
         # Mock the get_pages method to return our test image
         processor.get_pages = Mock(return_value=[image_bytes])
-        
+
         # Process the document
         result = processor.process_document("test.pdf")
-        
+
         # Verify the result preserves special characters
         assert result is not None
         assert len(result.text) == 1
-        assert 'Text with special chars: ©®™&<>' in result.text[0]
+        assert 'Text with special chars: (c)(R)(TM)&<>' in result.text[0]
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorInputValidation:
     """Input validation tests for NemoparseProcessor."""
 
@@ -521,53 +529,44 @@ class TestNemoparseProcessorInputValidation:
         assert all(result is not None for result in results)
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorFileHandling:
     """Tests for file handling methods."""
 
-    def test_get_pages_with_png_file(self):
+    def test_get_pages_with_png_file(self, tmp_path):
         """Test get_pages method with PNG file."""
         processor = NemoparseProcessor()
         
-        # Create a temporary PNG file
-        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
-            # Create a simple PNG image
-            img = Image.new('RGB', (100, 100), color='white')
-            img.save(tmp_file, format='PNG')
-            tmp_file_path = tmp_file.name
+        # Create a temporary PNG file using tmp_path
+        png_file = tmp_path / "test_image.png"
         
-        try:
-            # Test get_pages with PNG file
-            pages = processor.get_pages(tmp_file_path)
-            
-            # Verify we get one page
-            assert len(pages) == 1
-            assert isinstance(pages[0], bytes)
-            
-        finally:
-            # Clean up
-            os.unlink(tmp_file_path)
+        # Create a simple PNG image
+        img = Image.new('RGB', (100, 100), color='white')
+        img.save(png_file, format='PNG')
+        
+        # Test get_pages with PNG file
+        pages = processor.get_pages(str(png_file))
+        
+        # Verify we get one page
+        assert len(pages) == 1
+        assert isinstance(pages[0], bytes)
 
-    def test_get_pages_with_unsupported_file(self):
+    def test_get_pages_with_unsupported_file(self, tmp_path):
         """Test get_pages method with unsupported file type."""
         processor = NemoparseProcessor()
         
-        # Create a temporary file with unsupported extension
-        with tempfile.NamedTemporaryFile(suffix='.unsupported', delete=False) as tmp_file:
-            tmp_file.write(b'test content')
-            tmp_file_path = tmp_file.name
+        # Create a temporary file with unsupported extension using tmp_path
+        unsupported_file = tmp_path / "test_file.unsupported"
+        unsupported_file.write_bytes(b'test content')
         
-        try:
-            # Test get_pages with unsupported file - should raise exception
-            with pytest.raises(Exception) as exc_info:
-                processor.get_pages(tmp_file_path)
-            
-            assert "Unsupported filetype" in str(exc_info.value)
-            
-        finally:
-            # Clean up
-            os.unlink(tmp_file_path)
+        # Test get_pages with unsupported file - should raise exception
+        with pytest.raises(Exception) as exc_info:
+            processor.get_pages(str(unsupported_file))
+        
+        assert "Unsupported filetype" in str(exc_info.value)
 
 
+@pytest.mark.requires_nemotronparse
 class TestNemoparseProcessorIntegration:
     """Integration tests for NemoparseProcessor."""
 

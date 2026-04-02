@@ -4,6 +4,7 @@ import json
 import base64
 import io
 import os
+import tempfile
 
 from openai import OpenAI
 from PIL import Image, ImageDraw
@@ -12,6 +13,8 @@ from .processor import Processor
 from ..converter.pdf_to_image import convert_pdf_to_images, convert_bytes_to_images
 from ..output.nemoparse_output import NemoparseData, NemoparseOutput
 from ..ocr.nemotron_ocr import NemotronOCR
+
+from .evaluate_extraction import evaluate_extraction
 
 class NemoparseProcessor(Processor):
 
@@ -66,12 +69,12 @@ class NemoparseProcessor(Processor):
             print(f"An error occurred trying to encode the document: {e}")
             return None
 
-    def _process_image(self, image, draw_bboxes=True):
+    def _run_single_ocr_pass(self, image, draw_bboxes=True, temperature=0.0):
         base64_string = self._encode_image(image)
         base64_image = f"data:image/png;base64,{base64_string}"
 
-        # Use the wrapper for image processing
-        bbox_data = self.nemotron_ocr.get_detailed_ocr_results(base64_image)
+        # Use the wrapper for image processing with temperature
+        bbox_data = self.nemotron_ocr.get_detailed_ocr_results(base64_image, temperature=temperature)
 
         base_image = Image.open(io.BytesIO(image))
         width, height = base_image.size
@@ -125,6 +128,63 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
+    def _process_image(self, image, temperature=0.0, draw_bboxes=True, re_run=False, re_run_temp=0.4):
+        print(f"\nRunning with temperature {temperature}")
+        output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=temperature)
+
+        if not re_run:
+            return output
+
+        # Evaluate the initial pass to get our starting metrics
+        should_rerun, missed_percentage = evaluate_extraction(
+            image_bytes=image,
+            bbox_data=output.bbox_json,
+            temperature=temperature
+        )
+
+        # Set the baseline for the best performing run
+        best_output = output
+        lowest_missed = missed_percentage
+
+        if not should_rerun:
+            print("Initial pass meets criteria. Proceeding with current output.")
+            return best_output
+
+        print("Initial pass flagged for improvement. Initiating retry loop.")
+        attempts = 0
+        max_attempts = 3
+        
+        while attempts < max_attempts:
+            attempts += 1
+            print(f"\n*** Retry Attempt {attempts} of {max_attempts} (Temp: {re_run_temp}) ***")
+            
+            # Generate new output
+            current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp)
+            
+            # Evaluate the new output
+            should_rerun, missed_percentage = evaluate_extraction(
+                image_bytes=image,
+                bbox_data=current_output.bbox_json,
+                temperature=re_run_temp
+            )
+
+            # Compare and save the run with the lowest missed percentage
+            if missed_percentage < lowest_missed:
+                lowest_missed = missed_percentage
+                best_output = current_output
+
+            # Stop retrying if we hit a successful threshold
+            if not should_rerun:
+                print(f"Retry {attempts} successful. Breaking loop.")
+                break
+                
+            # Log when we hit the absolute limit
+            if attempts == max_attempts:
+                print(f"Max retries exhausted. Returning best attempt with {lowest_missed:.1f}% missed area.")
+
+        # Return whichever output performed best across all runs
+        return best_output
+
     def get_pages(self, filepath):
         file_pages = []
         if isinstance(filepath, io.BytesIO):
@@ -157,10 +217,10 @@ class NemoparseProcessor(Processor):
                     raise Exception(f"Unsupported filetype! {filepath}")
         return file_pages
 
-    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./"):
+    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False):
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath, draw_bboxes=draw_bboxes)
+            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run)
             if use_checkpointing:
                 basename = os.path.basename(filepath)
                 print(basename)
@@ -170,14 +230,14 @@ class NemoparseProcessor(Processor):
 
         return file_outputs
 
-    def process_page(self, page):
-        return self._process_image(page)
+    def process_page(self, page, re_run=False):
+        return self._process_image(page, re_run=re_run)
 
-    def process_document(self, filepath, draw_bboxes=True):
+    def process_document(self, filepath, draw_bboxes=True, re_run=False):
         # Basic check of file type
         file_pages = self.get_pages(filepath) 
 
         output = NemoparseOutput()
         for page_image in file_pages:
-            output.add_output(self._process_image(page_image, draw_bboxes=draw_bboxes))
+            output.add_output(self._process_image(page_image, draw_bboxes=draw_bboxes, re_run=re_run))
         return output

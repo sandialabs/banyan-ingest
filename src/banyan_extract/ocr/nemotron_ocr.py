@@ -25,12 +25,13 @@ class NemotronOCR:
         )
         self.model = model_name
 
-    def ocr_image(self, image: Image.Image) -> str:
+    def ocr_image(self, image: Image.Image, temperature: float = 0.0) -> str:
         """
         Perform OCR on a single image using Nemotron parse endpoint.
         
         Args:
             image: PIL Image object to perform OCR on
+            temperature: Sampling temperature for the API request
             
         Returns:
             Extracted text from the image
@@ -64,7 +65,8 @@ class NemotronOCR:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 tools=[{"type": "function", "function": {"name": "markdown_bbox"}}],
-                messages=messages
+                messages=messages,
+                temperature=temperature
             )
 
             # Extract text from response
@@ -84,12 +86,13 @@ class NemotronOCR:
             print(f"Error performing OCR with Nemotron: {e}")
             return ""
 
-    def get_detailed_ocr_results(self, base64_image: str):
+    def get_detailed_ocr_results(self, base64_image: str, temperature: float = 0.0):
         """
         Get detailed OCR results including bounding boxes and element types.
         
         Args:
             base64_image: Base64 encoded image string
+            temperature: Sampling temperature for the API request
             
         Returns:
             List of OCR result dictionaries with bounding box information
@@ -112,7 +115,8 @@ class NemotronOCR:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 tools=[{"type": "function", "function": {"name": "markdown_bbox"}}],
-                messages=messages
+                messages=messages,
+                temperature=temperature
             )
 
             tool_call = completion.choices[0].message.tool_calls[0]

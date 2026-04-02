@@ -217,10 +217,10 @@ class NemoparseProcessor(Processor):
                     raise Exception(f"Unsupported filetype! {filepath}")
         return file_pages
 
-    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False):
+    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False, temperature=0.0):
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run)
+            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run, temperature=temperature)
             if use_checkpointing:
                 basename = os.path.basename(filepath)
                 print(basename)
@@ -230,14 +230,14 @@ class NemoparseProcessor(Processor):
 
         return file_outputs
 
-    def process_page(self, page, re_run=False):
-        return self._process_image(page, re_run=re_run)
+    def process_page(self, page, re_run=False, temperature=0.0):
+        return self._process_image(page, re_run=re_run, temperature=temperature)
 
-    def process_document(self, filepath, draw_bboxes=True, re_run=False):
+    def process_document(self, filepath, draw_bboxes=True, re_run=False, temperature=0.0):
         # Basic check of file type
         file_pages = self.get_pages(filepath) 
 
         output = NemoparseOutput()
         for page_image in file_pages:
-            output.add_output(self._process_image(page_image, draw_bboxes=draw_bboxes, re_run=re_run))
+            output.add_output(self._process_image(page_image, temperature=temperature, draw_bboxes=draw_bboxes, re_run=re_run))
         return output

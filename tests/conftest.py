@@ -12,6 +12,11 @@ TEST_DATA_DIR = Path(__file__).parent / "data"
 from banyan_extract.utils.dependencies import has_marker_dependencies, has_nemotronparse_dependencies
 
 @pytest.fixture
+def test_data_dir():
+    """Return the base test data directory."""
+    return TEST_DATA_DIR
+
+@pytest.fixture
 def temp_output_dir(tmp_path):
     """Create a temporary directory for test outputs using pytest's tmp_path."""
     return tmp_path
@@ -34,12 +39,12 @@ def sample_json_output(test_data_dir):
 @pytest.fixture
 def rotation_test_pdf():
     """Return path to the rotation test PDF file (sample.pdf)."""
-    return TEST_DATA_DIR / "sample.pdf"
+    return TEST_DATA_DIR / "docs" / "sample.pdf"
 
 @pytest.fixture
 def rotation_test_pdf_with_shape():
     """Return path to the rotation test PDF file with colored shape (sample_shape.pdf)."""
-    return TEST_DATA_DIR / "sample_shape.pdf"
+    return TEST_DATA_DIR / "docs" / "sample_shape.pdf"
 
 @pytest.fixture
 def rotation_test_image():

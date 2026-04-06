@@ -6,6 +6,7 @@ import io
 import os
 import tempfile
 
+from typing import Union
 from openai import OpenAI
 from PIL import Image, ImageDraw
 
@@ -15,6 +16,7 @@ from ..output.nemoparse_output import NemoparseData, NemoparseOutput
 from ..ocr.nemotron_ocr import NemotronOCR
 
 from .evaluate_extraction import evaluate_extraction
+from ..utils.image_rotation import rotate_image, is_valid_rotation_angle
 
 class NemoparseProcessor(Processor):
 
@@ -69,7 +71,15 @@ class NemoparseProcessor(Processor):
             print(f"An error occurred trying to encode the document: {e}")
             return None
 
-    def _run_single_ocr_pass(self, image, draw_bboxes=True, temperature=0.0):
+    def _run_single_ocr_pass(self, image, draw_bboxes=True, temperature=0.0, rotation_angle: float = 0):
+        
+        if rotation_angle != 0:
+            image = rotate_image(Image.open(io.BytesIO(image)), rotation_angle)
+            # Convert back to bytes for processing
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            image = img_byte_arr.getvalue()
+
         base64_string = self._encode_image(image)
         base64_image = f"data:image/png;base64,{base64_string}"
 
@@ -217,10 +227,10 @@ class NemoparseProcessor(Processor):
                     raise Exception(f"Unsupported filetype! {filepath}")
         return file_pages
 
-    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False, temperature=0.0):
+    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False, temperature=0.0, rotation_angle: Union[int, float] = 0):
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run, temperature=temperature)
+            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run, temperature=temperature, rotation_angle=rotation_angle)
             if use_checkpointing:
                 basename = os.path.basename(filepath)
                 print(basename)
@@ -230,14 +240,22 @@ class NemoparseProcessor(Processor):
 
         return file_outputs
 
-    def process_page(self, page, re_run=False, temperature=0.0):
-        return self._process_image(page, re_run=re_run, temperature=temperature)
+    def process_page(self, page, re_run=False, temperature=0.0, rotation_angle: float = 0):
+        return self._process_image(page, re_run=re_run, temperature=temperature, rotation_angle=rotation_angle)
 
-    def process_document(self, filepath, draw_bboxes=True, re_run=False, temperature=0.0):
+    def process_document(self, filepath, draw_bboxes=True, re_run=False, temperature=0.0, rotation_angle: Union[int, float] = 0):
         # Basic check of file type
         file_pages = self.get_pages(filepath) 
 
+        # Validate rotation angle
+        if not is_valid_rotation_angle(rotation_angle):
+            raise ValueError(f"Invalid rotation angle: {rotation_angle}")
+        
+        # Normalize rotation angle
+        from ..utils.image_rotation import normalize_rotation_angle
+        normalized_angle = normalize_rotation_angle(rotation_angle)
+
         output = NemoparseOutput()
         for page_image in file_pages:
-            output.add_output(self._process_image(page_image, temperature=temperature, draw_bboxes=draw_bboxes, re_run=re_run))
+            output.add_output(self._process_image(page_image, temperature=temperature, draw_bboxes=draw_bboxes, re_run=re_run, rotation_angle=normalized_angle))
         return output

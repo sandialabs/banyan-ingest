@@ -1,7 +1,7 @@
 import re
 import io
 import PIL
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from tqdm import tqdm
 
@@ -97,7 +97,12 @@ class PptxProcessor(Processor):
             image_object = PIL.Image.open(byte_io)
             return image_object
 
-    def process_document(self, filepath):
+    def process_document(self, filepath, rotation_angle: Union[int, float] = 0):
+        # Note: PPTX processor doesn't currently support rotation as it works with structured slides
+        # For future implementation, we would need to rotate individual images within slides
+        if rotation_angle != 0:
+            print(f"Warning: Rotation is not currently supported for PptxProcessor. Angle {rotation_angle} will be ignored.")
+        
         prs = Presentation(filepath)
         images = []
         slide_texts = []
@@ -131,5 +136,10 @@ class PptxProcessor(Processor):
         metadata = {}
         return PptxOutput(slide_texts, images, metadata)
 
-    def process_batch_documents(self, filepaths):
+    def process_batch_documents(self, filepaths, rotation_angle: Union[int, float] = 0):
+        # Note: Batch processing not currently implemented for PPTX processor
+        if rotation_angle != 0:
+            print(f"Warning: Rotation is not currently supported for PptxProcessor. Angle {rotation_angle} will be ignored.")
+        
+        # For future implementation, we would process each file with rotation support
         pass

@@ -9,3 +9,9 @@ from .dependencies import (
     DependencyError,
     DependencyVersionError
 )
+
+from .image_rotation import (
+    rotate_image,
+    is_valid_rotation_angle,
+    normalize_rotation_angle
+)

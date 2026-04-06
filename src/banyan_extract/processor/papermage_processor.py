@@ -3,6 +3,7 @@ from papermage.recipes import CoreRecipe
 from papermage.visualizers.visualizer import plot_entities_on_page
 import pathlib
 import numpy as np
+from typing import Union
 
 from .processor import Processor
 from ..output.papermage_output import PaperMageOutput
@@ -13,7 +14,12 @@ class PaperMageProcessor(Processor):
         super().__init__()
         self.recipe = CoreRecipe()
 
-    def process_document(self, mode, filepath, options=None, colors=None):
+    def process_document(self, mode, filepath, options=None, colors=None, rotation_angle: Union[int, float] = 0):
+        # Note: PaperMage processor doesn't currently support rotation as it works directly with PDF files
+        # For future implementation, we would need to rotate the PDF pages before processing
+        if rotation_angle != 0:
+            print(f"Warning: Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} will be ignored.")
+        
         pdf_path = pathlib.Path(filepath)
 
         if mode == 'bound_single':
@@ -31,16 +37,22 @@ class PaperMageProcessor(Processor):
 
                 for idx, option in enumerate(options[1:]):
                     plotted = plot_entities_on_page(page_image=plotted, entities=intersect_dict[option], box_color=colors[idx])
-                    
+                 
+
                 output.append(plotted)
 
         elif mode == 'extract_single':
             output = self.recipe.run(pdf_path)
-            
+             
+
         return PaperMageOutput(output)
 
 
-    def process_batch_documents(self, mode, filepaths, options=None, colors=None):
+    def process_batch_documents(self, mode, filepaths, options=None, colors=None, rotation_angle: Union[int, float] = 0):
+        # Note: PaperMage processor doesn't currently support rotation as it works directly with PDF files
+        if rotation_angle != 0:
+            print(f"Warning: Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} will be ignored.")
+        
         parent_path = pathlib.Path(filepaths)
         file_list = list(pathlib.Path(parent_path).glob('*.pdf'))
 
@@ -63,7 +75,8 @@ class PaperMageProcessor(Processor):
 
                     for idx, option in enumerate(options[1:]):
                         plotted = plot_entities_on_page(page_image=plotted, entities=intersect_dict[option], box_color=colors[idx])
-                    
+                     
+
                     output[filename_strip].append(plotted)
 
         elif mode == 'extract_batch':

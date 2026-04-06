@@ -12,6 +12,11 @@ TEST_DATA_DIR = Path(__file__).parent / "data"
 from banyan_extract.utils.dependencies import has_marker_dependencies, has_nemotronparse_dependencies
 
 @pytest.fixture
+def test_data_dir():
+    """Return the base test data directory."""
+    return TEST_DATA_DIR
+
+@pytest.fixture
 def temp_output_dir(tmp_path):
     """Create a temporary directory for test outputs using pytest's tmp_path."""
     return tmp_path
@@ -30,6 +35,75 @@ def sample_pptx_file(test_data_dir):
 def sample_json_output(test_data_dir):
     """Return path to a sample JSON output file."""
     return test_data_dir / "outputs" / "sample_output.json"
+
+@pytest.fixture
+def rotation_test_pdf():
+    """Return path to the rotation test PDF file (sample.pdf)."""
+    return TEST_DATA_DIR / "docs" / "sample.pdf"
+
+@pytest.fixture
+def rotation_test_pdf_with_shape():
+    """Return path to the rotation test PDF file with colored shape (sample_shape.pdf)."""
+    return TEST_DATA_DIR / "docs" / "sample_shape.pdf"
+
+@pytest.fixture
+def rotation_test_image():
+    """Create a test image with distinctive features for rotation testing."""
+    from PIL import Image, ImageDraw
+    
+    # Create a 400x300 image with distinctive colored rectangles
+    image = Image.new('RGB', (400, 300), color='white')
+    draw = ImageDraw.Draw(image)
+    
+    # Draw distinctive shapes that will be easy to verify after rotation
+    # Top-left: Red rectangle (horizontal)
+    draw.rectangle([(50, 50), (250, 100)], fill='red')
+    draw.text((60, 60), "TOP-LEFT", fill='black')
+    
+    # Top-right: Blue rectangle (vertical)  
+    draw.rectangle([(350, 50), (380, 250)], fill='blue')
+    draw.text((355, 60), "TOP", fill='white')
+    draw.text((355, 80), "RIGHT", fill='white')
+    
+    # Bottom-left: Green square
+    draw.rectangle([(50, 200), (150, 300)], fill='green')
+    draw.text((60, 210), "BOTTOM", fill='black')
+    draw.text((60, 230), "LEFT", fill='black')
+    
+    # Bottom-right: Yellow rectangle
+    draw.rectangle([(250, 200), (380, 280)], fill='yellow')
+    draw.text((260, 210), "BOTTOM", fill='black')
+    draw.text((260, 230), "RIGHT", fill='black')
+    
+    return image
+
+@pytest.fixture
+def nemoparse_processor():
+    """Create a NemoparseProcessor instance for testing."""
+    pytest.importorskip("banyan_extract.processor.nemoparse_processor")
+    from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
+    return NemoparseProcessor()
+
+@pytest.fixture
+def marker_processor():
+    """Create a MarkerProcessor instance for testing."""
+    pytest.importorskip("banyan_extract.processor.marker_processor")
+    from banyan_extract.processor.marker_processor import MarkerProcessor
+    return MarkerProcessor()
+
+@pytest.fixture
+def pptx_processor():
+    """Create a PptxProcessor instance for testing."""
+    pytest.importorskip("banyan_extract.processor.pptx_processor")
+    from banyan_extract.processor.pptx_processor import PptxProcessor
+    return PptxProcessor()
+
+@pytest.fixture
+def papermage_processor():
+    """Create a PaperMageProcessor instance for testing."""
+    pytest.importorskip("banyan_extract.processor.papermage_processor")
+    from banyan_extract.processor.papermage_processor import PaperMageProcessor
+    return PaperMageProcessor()
 
 def has_all_optional_dependencies():
     """Check if all optional dependencies are available."""

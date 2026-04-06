@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument("--sort_by_position", action="store_true", default=True, help="Sort elements by spatial position for logical reading order")
     parser.add_argument("--re_run", action="store_true", default=False, help="Enables automatic retries. Uses contour area detection to evaluate missed regions, and re-runs the model at higher temperatures (max 3 retries) if the missed area is too high.")
     parser.add_argument("--temperature", default=0.0, type=float, help="Temperature setting for the model")
+    parser.add_argument("--rotation_angle", default=0, type=float, help="What angle (in degrees) to rotate the input page (or pages)")
     parser.add_argument("--pptx_ocr_backend", default="surya", type=str,
                        help="OCR backend for PPTX processing (surya or nemotron)")
     parser.add_argument("--pptx_nemotron_endpoint", default="", type=str,
@@ -115,18 +116,18 @@ def main():
                         raise Exception("Missing nemotron-parse endpoint url!")
 
                 # Process single file
-                output = processor.process_document(filepath, re_run=args.re_run, temperature=args.temperature)
+                output = processor.process_document(filepath, rotation_angle=args.rotation_angle, re_run=args.re_run, temperature=args.temperature)
                 if args.checkpointing:
                     output.save_output(output_directory, basename)
         else:
             # Use the selected processor for all files
-            outputs = document_processor.process_batch_documents(file_paths, use_checkpointing=args.checkpointing, draw_bboxes=args.draw_bboxes, output_dir=output_directory, re_run=args.re_run, temperature=args.temperature)
+            outputs = document_processor.process_batch_documents(file_paths, use_checkpointing=args.checkpointing, draw_bboxes=args.draw_bboxes, output_dir=output_directory, re_run=args.re_run, temperature=args.temperature, rotation_angle=args.rotation_angle)
             if not args.checkpointing:
                 for file_output, basename in zip(outputs, basenames):
                     file_output.save_output(output_directory, basename)
     else:
         filename = args.input_file
-        outputs = document_processor.process_document(filename, re_run=args.re_run, temperature=args.temperature)
+        outputs = document_processor.process_document(filename, re_run=args.re_run, temperature=args.temperature,, rotation_angle=args.rotation_angle)
 
         outputs.save_output(output_directory, output_base)
 

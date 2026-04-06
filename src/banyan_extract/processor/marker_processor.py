@@ -191,14 +191,19 @@ class MarkerProcessor(Processor):
                         config=config,
                         )
 
-    def process_document(self, filepath):
+    def process_document(self, filepath, rotation_angle: Union[int, float] = 0):
+        # Note: Marker processor doesn't currently support rotation as it works directly with PDF files
+        # For future implementation, we would need to rotate the PDF pages before processing
+        if rotation_angle != 0:
+            print(f"Warning: Rotation is not currently supported for MarkerProcessor. Angle {rotation_angle} will be ignored.")
+        
         output = self.converter(filepath)
         return MarkerOutput(output)
 
-    def process_batch_documents(self, filepaths):
+    def process_batch_documents(self, filepaths, rotation_angle: Union[int, float] = 0):
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath)
+            output = self.process_document(filepath, rotation_angle=rotation_angle)
             file_outputs.append(output)
             #try:
             #    output = self.process_document(filepath)

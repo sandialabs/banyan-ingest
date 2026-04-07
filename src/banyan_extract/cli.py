@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from dotenv import load_dotenv, dotenv_values
 
@@ -21,15 +22,18 @@ def parse_arguments():
     parser.add_argument("output_dir", default=None, type=str, help="Path for output from single or multiple files")
     parser.add_argument("--is_input_dir", action="store_true",  help="Flags to set input file to directory")
     parser.add_argument("--output_base", default="banyan-extract-output", type=str,  help="Base name for output files")
-    parser.add_argument("--backend", default="auto", type=str,  help="Which backend to use (auto (default)- auto-detect, nemoparse - Nemotron Parse, marker - marker, pptx - PPTX processor)")
+    parser.add_argument("--backend", default="auto", type=str,  help="Which backend to use (auto (default) - auto-detect, nemoparse - Nemotron Parse, marker - marker, pptx - PPTX processor)")
     parser.add_argument("--config_file", default=".env", type=str,  help="Which config file to use (defaults to ./.env)")
     parser.add_argument("--endpoint", default="", type=str, help="Endpoint url for nemoretreiver-parse model")
     parser.add_argument("--model_name", default="", type=str, help="Endpoint url for nemoretreiver-parse model")
     parser.add_argument("--checkpointing", action="store_true", help="Flag where if true, then batch documents will be saved as they get processed")
     parser.add_argument("--draw_bboxes", action="store_true", default=False, help="Flag where if true, then ouptut will include images that show most bboxes found")
     parser.add_argument("--sort_by_position", action="store_true", default=True, help="Sort elements by spatial position for logical reading order")
-    parser.add_argument("--re_run", action="store_true", default=False, help="Enables automatic retries. Uses contour area detection to evaluate missed regions, and re-runs the model at higher temperatures (max 3 retries) if the missed area is too high.")
-    parser.add_argument("--temperature", default=0.0, type=float, help="Temperature setting for the model")
+    
+    # Updated Help Descriptions for re_run and temperature
+    parser.add_argument("--re_run", action="store_true", default=False, help="Enables automatic retries. Uses contour area detection to evaluate missed regions, and re-runs the model at higher temperatures (max 3 retries) if the missed area is too high. Note: This flag is ONLY supported by the nemotron parse model.")
+    parser.add_argument("--temperature", default=0.0, type=float, help="Temperature setting for the model. Note: This flag is ONLY supported by the nemotron parse model.")
+    
     parser.add_argument("--rotation_angle", default=0, type=float, help="What angle (in degrees) to rotate the input page (or pages)")
     parser.add_argument("--pptx_ocr_backend", default="surya", type=str,
                        help="OCR backend for PPTX processing (surya or nemotron)")
@@ -37,7 +41,15 @@ def parse_arguments():
                        help="Nemotron endpoint URL for PPTX OCR")
     parser.add_argument("--pptx_nemotron_model", default="nvidia/nemoretriever-parse", type=str,
                        help="Nemotron model for PPTX OCR")
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    # Early validation if user explicitly sets a backend that isn't nemoparse
+    if args.backend not in ["auto", "nemoparse"]:
+        if args.re_run or args.temperature != 0.0:
+            parser.error("The --re_run and --temperature flags can only be used with the nemotron parse model (nemoparse backend).")
+
+    return args
 
 
 def main():
@@ -63,6 +75,11 @@ def main():
                 backend = "nemoparse"
             else:
                 backend = "nemoparse"  # Default to nemoparse for unknown types
+
+            # Validation for single file auto-detection
+            if backend != "nemoparse" and (args.re_run or args.temperature != 0.0):
+                print(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).", file=sys.stderr)
+                sys.exit(1)
 
     if backend == "nemoparse":
         if len(endpoint) == 0:
@@ -100,11 +117,18 @@ def main():
             for filepath, basename in zip(file_paths, basenames):
                 # Determine processor based on file extension
                 if filepath.lower().endswith('.pptx'):
+                    # Validation for files looping within a directory
+                    if args.re_run or args.temperature != 0.0:
+                        print(f"Error: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.", file=sys.stderr)
+                        sys.exit(1)
+
                     processor = PptxProcessor(
                         ocr_backend=args.pptx_ocr_backend,
                         nemotron_endpoint=args.pptx_nemotron_endpoint or args.endpoint,
                         nemotron_model=args.pptx_nemotron_model or args.model_name
                     )
+                    # Exclude re_run and temperature kwargs
+                    output = processor.process_document(filepath, rotation_angle=args.rotation_angle)
                 else:  # Default to nemoparse for PDF and other files
                     if len(endpoint) == 0:
                         config_values = dotenv_values(args.config_file)
@@ -114,20 +138,31 @@ def main():
                         processor = NemoparseProcessor(endpoint_url=endpoint, model_name=model_name, sort_by_position=args.sort_by_position)
                     else:
                         raise Exception("Missing nemotron-parse endpoint url!")
+                    
+                    # Include re_run and temperature kwargs
+                    output = processor.process_document(filepath, rotation_angle=args.rotation_angle, re_run=args.re_run, temperature=args.temperature)
 
-                # Process single file
-                output = processor.process_document(filepath, rotation_angle=args.rotation_angle, re_run=args.re_run, temperature=args.temperature)
                 if args.checkpointing:
                     output.save_output(output_directory, basename)
         else:
             # Use the selected processor for all files
-            outputs = document_processor.process_batch_documents(file_paths, use_checkpointing=args.checkpointing, draw_bboxes=args.draw_bboxes, output_dir=output_directory, re_run=args.re_run, temperature=args.temperature, rotation_angle=args.rotation_angle)
+            # Branch logic so we do not pass invalid kwargs to Marker or Pptx processors
+            if backend == "nemoparse":
+                outputs = document_processor.process_batch_documents(file_paths, use_checkpointing=args.checkpointing, draw_bboxes=args.draw_bboxes, output_dir=output_directory, re_run=args.re_run, temperature=args.temperature, rotation_angle=args.rotation_angle)
+            else:
+                outputs = document_processor.process_batch_documents(file_paths, use_checkpointing=args.checkpointing, draw_bboxes=args.draw_bboxes, output_dir=output_directory, rotation_angle=args.rotation_angle)
+            
             if not args.checkpointing:
                 for file_output, basename in zip(outputs, basenames):
                     file_output.save_output(output_directory, basename)
     else:
         filename = args.input_file
-        outputs = document_processor.process_document(filename, re_run=args.re_run, temperature=args.temperature,, rotation_angle=args.rotation_angle)
+        
+        # Branch logic so we do not pass invalid kwargs to Marker or Pptx processors
+        if backend == "nemoparse":
+            outputs = document_processor.process_document(filename, re_run=args.re_run, temperature=args.temperature, rotation_angle=args.rotation_angle)
+        else:
+            outputs = document_processor.process_document(filename, rotation_angle=args.rotation_angle)
 
         outputs.save_output(output_directory, output_base)
 

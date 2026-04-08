@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 marker = ["marker-pdf", "surya-ocr"]
     
-nemotronparse = ["openai"]
+nemotronparse = ["openai", "opencv-python", "numpy"]
 
 [project.scripts]
 banyan-extract = "banyan_extract.cli:main"

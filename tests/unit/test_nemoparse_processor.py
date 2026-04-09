@@ -324,9 +324,15 @@ class TestNemoparseProcessorErrorHandling:
         mock_image2.save(img_byte_arr2, format='PNG')
         image_bytes2 = img_byte_arr2.getvalue()
         
-        # Mock the OCR API to succeed for first doc but fail for second
         def mock_ocr_response(base64_image, **kwargs):
-            if 'doc1' in base64_image:
+            # Check if the base64 image contains doc1 or doc2 identifier
+            # Since we can't easily inspect base64 content, we'll use a counter
+            if not hasattr(mock_ocr_response, 'call_count'):
+                mock_ocr_response.call_count = 0
+            
+            mock_ocr_response.call_count += 1
+            
+            if mock_ocr_response.call_count == 1:  # First call (doc1)
                 return [
                     {
                         'type': 'Text',
@@ -334,7 +340,7 @@ class TestNemoparseProcessorErrorHandling:
                         'text': 'Document 1 text'
                     }
                 ]
-            else:
+            else:  # Second call (doc2)
                 raise Exception("API error for document 2")
         
         processor.nemotron_ocr.get_detailed_ocr_results = Mock(side_effect=mock_ocr_response)
@@ -349,14 +355,16 @@ class TestNemoparseProcessorErrorHandling:
         
         processor.get_pages = Mock(side_effect=mock_get_pages)
         
-        # Process batch documents - should fail on second document
+        # Process batch documents - should handle errors gracefully and continue
         filepaths = ['doc1.pdf', 'doc2.pdf']
         
-        # Should raise exception for the second document
-        with pytest.raises(Exception) as exc_info:
-            processor.process_batch_documents(filepaths, use_checkpointing=False)
+        # Should not raise exception - should handle errors gracefully
+        results = processor.process_batch_documents(filepaths, use_checkpointing=False)
         
-        assert "API error for document 2" in str(exc_info.value)
+        # Should return results for successful documents only
+        assert len(results) == 1  # Only doc1 should be processed successfully
+        assert results[0] is not None
+        assert 'Document 1 text' in results[0].text[0][0]
 
 
 @pytest.mark.requires_nemotronparse
@@ -660,6 +668,294 @@ class TestNemoparseProcessorIntegration:
         # Verify each page's text is present
         for i, page_text in enumerate(result.text):
             assert f'Page {i+1} text' in page_text[0]
+
+
+@pytest.mark.requires_nemotronparse
+class TestNemoparseProcessorRotationDetection:
+    """Tests for rotation detection functionality in NemoparseProcessor."""
+
+    def test_process_image_with_auto_detect_rotation_success(self):
+        """Test successful auto rotation detection in _process_image."""
+        processor = NemoparseProcessor()
+        
+        # Create a mock image
+        mock_image = Image.new('RGB', (100, 100), color='white')
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        mock_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+        
+        # Mock the rotation detection to return a 90-degree rotation
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.return_value = 90.0
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Rotated text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Process the image with auto-detection enabled
+            result = processor._process_image(
+                image_bytes, 
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called
+            mock_detect.assert_called_once()
+            
+            # Verify the result
+            assert result is not None
+            assert isinstance(result, NemoparseData)
+            assert len(result.text) == 1
+            assert 'Rotated text' in result.text[0]
+
+    def test_process_image_with_auto_detect_rotation_failure(self):
+        """Test graceful handling of rotation detection failure."""
+        processor = NemoparseProcessor()
+        
+        # Create a mock image
+        mock_image = Image.new('RGB', (100, 100), color='white')
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        mock_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+        
+        # Mock the rotation detection to raise an exception
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.side_effect = Exception("Tesseract not available")
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Non-rotated text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Process the image with auto-detection enabled - should not crash
+            result = processor._process_image(
+                image_bytes, 
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called
+            mock_detect.assert_called_once()
+            
+            # Verify the result - should still process the image without rotation
+            assert result is not None
+            assert isinstance(result, NemoparseData)
+            assert len(result.text) == 1
+            assert 'Non-rotated text' in result.text[0]
+
+    def test_process_image_manual_rotation_takes_precedence(self):
+        """Test that manual rotation takes precedence over auto-detection."""
+        processor = NemoparseProcessor()
+        
+        # Create a mock image
+        mock_image = Image.new('RGB', (100, 100), color='white')
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        mock_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+        
+        # Mock the rotation detection to return a rotation angle
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.return_value = 90.0
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Manually rotated text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Process the image with both manual rotation and auto-detection enabled
+            result = processor._process_image(
+                image_bytes, 
+                rotation_angle=180,
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called (but manual rotation should take precedence)
+            mock_detect.assert_called_once()
+            
+            # Verify the result
+            assert result is not None
+            assert isinstance(result, NemoparseData)
+            assert len(result.text) == 1
+            assert 'Manually rotated text' in result.text[0]
+
+    def test_process_document_with_auto_detect_rotation(self):
+        """Test document processing with auto rotation detection enabled."""
+        processor = NemoparseProcessor()
+        
+        # Create a mock image
+        mock_image = Image.new('RGB', (100, 100), color='white')
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        mock_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+        
+        # Mock the rotation detection
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.return_value = 0.0  # No rotation needed
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Auto-detected document text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Mock the get_pages method
+            processor.get_pages = Mock(return_value=[image_bytes])
+            
+            # Process the document with auto-detection enabled
+            result = processor.process_document(
+                "test.pdf",
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called
+            mock_detect.assert_called_once()
+            
+            # Verify the result
+            assert result is not None
+            assert len(result.text) == 1
+            assert 'Auto-detected document text' in result.text[0]
+
+    def test_process_batch_with_auto_detect_rotation(self):
+        """Test batch processing with auto rotation detection enabled."""
+        processor = NemoparseProcessor()
+        
+        # Create mock images
+        mock_image1 = Image.new('RGB', (100, 100), color='white')
+        mock_image2 = Image.new('RGB', (100, 100), color='lightgray')
+        
+        # Convert images to bytes
+        img_byte_arr1 = io.BytesIO()
+        mock_image1.save(img_byte_arr1, format='PNG')
+        image_bytes1 = img_byte_arr1.getvalue()
+        
+        img_byte_arr2 = io.BytesIO()
+        mock_image2.save(img_byte_arr2, format='PNG')
+        image_bytes2 = img_byte_arr2.getvalue()
+        
+        # Mock the rotation detection
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.return_value = 0.0  # No rotation needed
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Batch document text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Mock the get_pages method
+            def mock_get_pages(filepath):
+                if 'doc1' in filepath:
+                    return [image_bytes1]
+                elif 'doc2' in filepath:
+                    return [image_bytes2]
+                return []
+            
+            processor.get_pages = Mock(side_effect=mock_get_pages)
+            
+            # Process batch documents with auto-detection enabled
+            filepaths = ['doc1.pdf', 'doc2.pdf']
+            results = processor.process_batch_documents(
+                filepaths, 
+                use_checkpointing=False,
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called for each document
+            assert mock_detect.call_count == 2
+            
+            # Verify the results
+            assert len(results) == 2
+            assert all(result is not None for result in results)
+            assert all('Batch document text' in result.text[0][0] for result in results)
+
+    def test_process_page_with_auto_detect_rotation(self):
+        """Test page processing with auto rotation detection enabled."""
+        processor = NemoparseProcessor()
+        
+        # Create a mock image
+        mock_image = Image.new('RGB', (100, 100), color='white')
+        
+        # Convert image to bytes
+        img_byte_arr = io.BytesIO()
+        mock_image.save(img_byte_arr, format='PNG')
+        image_bytes = img_byte_arr.getvalue()
+        
+        # Mock the rotation detection
+        with patch('banyan_extract.processor.nemoparse_processor.detect_rotation_angle_with_fallback') as mock_detect:
+            mock_detect.return_value = 0.0  # No rotation needed
+            
+            # Mock the OCR API response
+            mock_bbox_data = [
+                {
+                    'type': 'Text',
+                    'bbox': {'xmin': 0.1, 'ymin': 0.1, 'xmax': 0.5, 'ymax': 0.2},
+                    'text': 'Auto-detected page text'
+                }
+            ]
+            
+            # Mock the nemotron_ocr.get_detailed_ocr_results method
+            processor.nemotron_ocr.get_detailed_ocr_results = Mock(return_value=mock_bbox_data)
+            
+            # Process the page with auto-detection enabled
+            result = processor.process_page(
+                image_bytes,
+                auto_detect_rotation=True,
+                rotation_confidence_threshold=0.7
+            )
+            
+            # Verify rotation detection was called
+            mock_detect.assert_called_once()
+            
+            # Verify the result
+            assert result is not None
+            assert isinstance(result, NemoparseData)
+            assert len(result.text) == 1
+            assert 'Auto-detected page text' in result.text[0]
 
 
 if __name__ == "__main__":

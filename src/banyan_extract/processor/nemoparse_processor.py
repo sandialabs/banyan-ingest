@@ -5,10 +5,16 @@ import base64
 import io
 import os
 import tempfile
+import logging
 
 from typing import Union
 from openai import OpenAI
 from PIL import Image, ImageDraw
+
+# Use centralized logging
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 from .processor import Processor
 from ..converter.pdf_to_image import convert_pdf_to_images, convert_bytes_to_images
@@ -17,6 +23,7 @@ from ..ocr.nemotron_ocr import NemotronOCR
 
 from ..utils.evaluate_extraction import evaluate_extraction
 from ..utils.image_rotation import rotate_image, is_valid_rotation_angle
+from ..utils.rotation_detection import detect_rotation_angle_with_fallback
 
 class NemoparseProcessor(Processor):
 
@@ -63,23 +70,36 @@ class NemoparseProcessor(Processor):
         return sorted(bbox_data, key=get_sort_key)
 
     def _encode_image(self, image):
+        """
+        Encode image data to base64 string.
+        
+        Args:
+            image: Image data in bytes
+            
+        Returns:
+            Base64 encoded string or None if encoding fails
+            
+        Raises:
+            ValueError: If image data is invalid
+            UnicodeDecodeError: If UTF-8 decoding fails
+        """
         try:
+            if not image:
+                raise ValueError("Image data cannot be empty or None")
             base64_encoded_data = base64.b64encode(image)
             base64_string = base64_encoded_data.decode("utf-8")
             return base64_string
+        except ValueError as e:
+            logger.error(f"Invalid image data: {e}")
+            return None
+        except UnicodeDecodeError as e:
+            logger.error(f"Failed to decode base64 data: {e}")
+            return None
         except Exception as e:
-            print(f"An error occurred trying to encode the document: {e}")
+            logger.error(f"Unexpected error encoding image: {e}")
             return None
 
-    def _run_single_ocr_pass(self, image, draw_bboxes, temperature, rotation_angle):
-        
-        if rotation_angle != 0:
-            image = rotate_image(Image.open(io.BytesIO(image)), rotation_angle)
-            # Convert back to bytes for processing
-            img_byte_arr = io.BytesIO()
-            image.save(img_byte_arr, format='PNG')
-            image = img_byte_arr.getvalue()
-
+    def _run_single_ocr_pass(self, image, draw_bboxes, temperature):
         base64_string = self._encode_image(image)
         base64_image = f"data:image/png;base64,{base64_string}"
 
@@ -138,9 +158,49 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
-    def _process_image(self, image, temperature=0.0, draw_bboxes=True, re_run=False, re_run_temp=0.4, rotation_angle: float = 0):
+    def _process_image(self, image, temperature=0.0, draw_bboxes=True, re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
+                       auto_detect_rotation: bool = False, 
+                       rotation_confidence_threshold: float = 0.7):
         print(f"\nRunning with temperature {temperature}")
-        output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=temperature, rotation_angle=rotation_angle)
+        # Auto-detect rotation using Tesseract OCR if enabled
+        if auto_detect_rotation:
+            try:
+                # Convert image bytes to PIL Image for rotation detection
+                pil_image = Image.open(io.BytesIO(image))
+                
+                # Detect rotation angle with fallback handling
+                detected_angle = detect_rotation_angle_with_fallback(
+                    pil_image, 
+                    confidence_threshold=rotation_confidence_threshold
+                )
+                
+                # Log detected rotation angle for debugging
+                if detected_angle != 0:
+                    logger.info(f"Auto-detected rotation angle: {detected_angle} degrees")
+                else:
+                    logger.debug("Auto-detection: no rotation needed (angle = 0)")
+                
+                # Apply detected rotation if non-zero
+                if detected_angle != 0:
+                    rotated_image = rotate_image(pil_image, detected_angle)
+                    # Convert back to bytes for processing
+                    img_byte_arr = io.BytesIO()
+                    rotated_image.save(img_byte_arr, format='PNG')
+                    image = img_byte_arr.getvalue()
+                    
+            except Exception as e:
+                # Handle any errors during rotation detection gracefully
+                logger.warning(f"Rotation detection failed, proceeding without rotation: {e}")
+                # Continue with original image
+        if rotation_angle != 0:
+            image = rotate_image(Image.open(io.BytesIO(image)), rotation_angle)
+            # Convert back to bytes for processing
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='PNG')
+            image = img_byte_arr.getvalue()
+
+        # Apply manual rotation if specified (takes precedence over auto-detection)
+        output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=temperature)
 
         if not re_run:
             return output
@@ -169,7 +229,7 @@ class NemoparseProcessor(Processor):
             print(f"\n*** Retry Attempt {attempts} of {max_attempts} (Temp: {re_run_temp}) ***")
             
             # Generate new output
-            current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp, rotation_angle=rotation_angle)
+            current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp)
             
             # Evaluate the new output
             should_rerun, missed_percentage = evaluate_extraction(
@@ -223,39 +283,157 @@ class NemoparseProcessor(Processor):
                         image.save(img_byte_arr, format='PNG')
                         img_byte_arr = img_byte_arr.getvalue()
                         file_pages.append(img_byte_arr)
-                except:
-                    raise Exception(f"Unsupported filetype! {filepath}")
+                except Exception as e:
+                    raise ValueError(f"Unsupported filetype or error processing file {filepath}: {e}")
         return file_pages
 
-    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", re_run=False, temperature=0.0, rotation_angle: Union[int, float] = 0):
+    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", 
+                               re_run=False,
+                               temperature=0.0,
+                               rotation_angle: Union[int, float] = 0, 
+                               auto_detect_rotation: bool = False, 
+                               rotation_confidence_threshold: float = 0.7):
+        """
+        Process multiple documents with optional rotation.
+        
+        Args:
+            filepaths: List of file paths to process
+            use_checkpointing: Whether to save outputs as they are processed (default: True)
+            draw_bboxes: Whether to draw bounding boxes on output images (default: True)
+            output_dir: Directory to save outputs (default: "./")
+            rotation_angle: Rotation angle in degrees (default: 0)
+            auto_detect_rotation: Whether to automatically detect rotation (default: False)
+            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
+            
+        Returns:
+            List of NemoparseOutput objects if use_checkpointing=False, else empty list
+        """
+        # Log batch processing information
+        logger.info(f"Processing batch of {len(filepaths)} documents")
+        if auto_detect_rotation:
+            logger.info("Auto rotation detection enabled for batch processing")
+        if rotation_angle != 0:
+            logger.info(f"Manual rotation angle for batch: {rotation_angle} degrees")
+
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath, draw_bboxes=draw_bboxes, re_run=re_run, temperature=temperature, rotation_angle=rotation_angle)
-            if use_checkpointing:
-                basename = os.path.basename(filepath)
-                print(basename)
-                output.save_output(output_dir, basename)
-            else:
-                file_outputs.append(output)
+            try:
+                logger.info(f"Processing file: {filepath}")
+                output = self.process_document(
+                    filepath, 
+                    draw_bboxes=draw_bboxes, 
+                    re_run=re_run,
+                    temperature=temperature,
+                    rotation_angle=rotation_angle,
+                    auto_detect_rotation=auto_detect_rotation,
+                    rotation_confidence_threshold=rotation_confidence_threshold
+                )
+                if use_checkpointing:
+                    basename = os.path.basename(filepath)
+                    logger.info(f"Saving output for: {basename}")
+                    output.save_output(output_dir, basename)
+                else:
+                    file_outputs.append(output)
+                    
+            except Exception as e:
+                logger.error(f"Failed to process file {filepath}: {e}")
+                # Continue with next file even if one fails
+                continue
 
+        logger.info(f"Batch processing completed. Processed {len(file_outputs) if not use_checkpointing else len(filepaths)} files.")
         return file_outputs
 
-    def process_page(self, page, re_run=False, temperature=0.0, rotation_angle: float = 0):
-        return self._process_image(page, re_run=re_run, temperature=temperature, rotation_angle=rotation_angle)
-
-    def process_document(self, filepath, draw_bboxes=True, re_run=False, temperature=0.0, rotation_angle: Union[int, float] = 0):
-        # Basic check of file type
-        file_pages = self.get_pages(filepath) 
-
-        # Validate rotation angle
-        if not is_valid_rotation_angle(rotation_angle):
-            raise ValueError(f"Invalid rotation angle: {rotation_angle}")
+    def process_page(self, page,
+                     re_run=False,
+                     temperature=0.0,
+                     rotation_angle: float = 0, 
+                     auto_detect_rotation: bool = False, 
+                     rotation_confidence_threshold: float = 0.7):
+        """
+        Process a single page with optional rotation.
         
+        Args:
+            page: Page image data in bytes
+            rotation_angle: Rotation angle in degrees (default: 0)
+            auto_detect_rotation: Whether to automatically detect rotation (default: False)
+            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
+            
+        Returns:
+            NemoparseData object containing processed page data
+        """
+        return self._process_image(
+            page, 
+            re_run=re_run,
+            temperature=temperature,
+            rotation_angle=rotation_angle,
+            auto_detect_rotation=auto_detect_rotation,
+            rotation_confidence_threshold=rotation_confidence_threshold
+        )
+
+    def process_document(self, filepath,
+                         draw_bboxes=True, 
+                         re_run=False,
+                         temperature=0.0,
+                         rotation_angle: Union[int, float] = 0,
+                         auto_detect_rotation: bool = False,
+                         rotation_confidence_threshold: float = 0.7):
+        """
+        Process a single document with optional rotation.
+        
+        Args:
+            filepath: Path to the document file
+            draw_bboxes: Whether to draw bounding boxes on output images (default: True)
+            rotation_angle: Rotation angle in degrees (default: 0)
+            auto_detect_rotation: Whether to automatically detect rotation (default: False)
+            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
+            
+        Returns:
+            NemoparseOutput object containing processed document data
+            
+        Raises:
+            FileNotFoundError: If the input file cannot be found
+            PermissionError: If the input file cannot be read
+            ValueError: If rotation parameters are invalid or file type is unsupported
+            Exception: For other processing errors
+        """
+        # Validate rotation angle if provided
+        if rotation_angle != 0 and not is_valid_rotation_angle(rotation_angle):
+            raise ValueError(f"Invalid rotation angle: {rotation_angle}")
+         
+        # Validate confidence threshold
+        if not (0.0 <= rotation_confidence_threshold <= 1.0):
+            raise ValueError(f"rotation_confidence_threshold must be between 0.0 and 1.0, got {rotation_confidence_threshold}")
+         
         # Normalize rotation angle
         from ..utils.image_rotation import normalize_rotation_angle
-        normalized_angle = normalize_rotation_angle(rotation_angle)
+        normalized_angle = normalize_rotation_angle(rotation_angle) if rotation_angle != 0 else 0
+
+        # Log rotation processing information
+        if auto_detect_rotation:
+            logger.info("Auto rotation detection enabled")
+        if normalized_angle != 0:
+            logger.info(f"Manual rotation angle: {normalized_angle} degrees")
+        if auto_detect_rotation and normalized_angle != 0:
+            logger.warning("Both manual rotation and auto-detection are enabled. Manual rotation will take precedence.")
+
+        # Basic check of file type and get pages
+        try:
+            file_pages = self.get_pages(filepath)
+        except Exception as e:
+            raise ValueError(f"Error processing file {filepath}: {e}")
 
         output = NemoparseOutput()
-        for page_image in file_pages:
-            output.add_output(self._process_image(page_image, temperature=temperature, draw_bboxes=draw_bboxes, re_run=re_run, rotation_angle=normalized_angle))
+        for page_num, page_image in enumerate(file_pages, 1):
+            try:
+                logger.debug(f"Processing page {page_num}")
+                output.add_output(self._process_image(
+                    page_image, 
+                    draw_bboxes=draw_bboxes, 
+                    rotation_angle=normalized_angle,
+                    auto_detect_rotation=auto_detect_rotation,
+                    rotation_confidence_threshold=rotation_confidence_threshold
+                ))
+            except Exception as e:
+                logger.error(f"Error processing page {page_num}: {e}")
+                raise
         return output

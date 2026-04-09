@@ -1,4 +1,6 @@
 import pandas as pd
+import logging
+import sys
 
 from marker.models import create_model_dict
 from marker.settings import settings
@@ -15,6 +17,11 @@ from pydantic import BaseModel
 
 from .processor import Processor
 from ..output.marker_output import MarkerOutput
+
+# Use centralized logging
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class CustomMarkdownify(Markdownify):
@@ -191,24 +198,83 @@ class MarkerProcessor(Processor):
                         config=config,
                         )
 
-    def process_document(self, filepath, rotation_angle: Union[int, float] = 0):
+    def process_document(self, filepath, rotation_angle: Union[int, float] = 0,
+                       auto_detect_rotation: bool = False, 
+                       rotation_confidence_threshold: float = 0.7):
+        """
+        Process a single document using Marker PDF processor.
+        
+        Args:
+            filepath: Path to the PDF document file
+            rotation_angle: Rotation angle in degrees (default: 0)
+            auto_detect_rotation: Whether to automatically detect rotation (default: False)
+            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
+            
+        Returns:
+            MarkerOutput object containing processed document data
+            
+        Raises:
+            FileNotFoundError: If the input file cannot be found
+            PermissionError: If the input file cannot be read
+            ValueError: If the file is not a valid PDF
+            Exception: For other processing errors
+            
+        Note:
+            Rotation is not currently supported for MarkerProcessor as it works directly
+            with PDF files. For future implementation, we would need to rotate the PDF 
+            pages before processing.
+        """
         # Note: Marker processor doesn't currently support rotation as it works directly with PDF files
         # For future implementation, we would need to rotate the PDF pages before processing
-        if rotation_angle != 0:
-            print(f"Warning: Rotation is not currently supported for MarkerProcessor. Angle {rotation_angle} will be ignored.")
+        if rotation_angle != 0 or auto_detect_rotation:
+            logger.warning(f"Rotation is not currently supported for MarkerProcessor. "
+                          f"Angle {rotation_angle} and auto-detection will be ignored.")
         
-        output = self.converter(filepath)
-        return MarkerOutput(output)
+        try:
+            output = self.converter(filepath)
+            return MarkerOutput(output)
+        except Exception as e:
+            logger.error(f"Error processing document with Marker: {e}")
+            raise ValueError(f"Failed to process document: {e}") from e
 
-    def process_batch_documents(self, filepaths, rotation_angle: Union[int, float] = 0):
+    def process_batch_documents(self, filepaths, rotation_angle: Union[int, float] = 0,
+                                auto_detect_rotation: bool = False, 
+                                rotation_confidence_threshold: float = 0.7):
+        """
+        Process multiple documents with batch processing.
+        
+        Args:
+            filepaths: List of paths to document files
+            rotation_angle: Rotation angle in degrees (default: 0)
+            auto_detect_rotation: Whether to automatically detect rotation (default: False)
+            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
+            
+        Returns:
+            List of MarkerOutput objects for each processed file
+            
+        Raises:
+            FileNotFoundError: If a file cannot be found
+            PermissionError: If a file cannot be read
+            Exception: For other processing errors
+        """
         file_outputs = []
         for filepath in filepaths:
-            output = self.process_document(filepath, rotation_angle=rotation_angle)
-            file_outputs.append(output)
-            #try:
-            #    output = self.process_document(filepath)
-            #    file_outputs.append(output)
-            #except:
-            #    print(f"Failed to parse document: {filepath}")
+            try:
+                output = self.process_document(
+                    filepath, 
+                    rotation_angle=rotation_angle,
+                    auto_detect_rotation=auto_detect_rotation,
+                    rotation_confidence_threshold=rotation_confidence_threshold
+                )
+                file_outputs.append(output)
+            except FileNotFoundError as e:
+                logger.error(f"File not found: {filepath} - {e}")
+                raise
+            except PermissionError as e:
+                logger.error(f"Permission denied reading file: {filepath} - {e}")
+                raise
+            except Exception as e:
+                logger.error(f"Failed to parse document: {filepath} - {e}")
+                raise
 
         return file_outputs

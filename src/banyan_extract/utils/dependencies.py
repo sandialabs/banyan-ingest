@@ -1,32 +1,26 @@
 # Dependency Detection Utilities
 # This module provides enhanced dependency detection functions with error handling, logging, caching, and version checking
+# It includes support for marker, nemotronparse, and Tesseract OCR dependencies
 
 import importlib
 import logging
+import subprocess
 import sys
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
 
-# Configure logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+# Use centralized logging
+from .logging_config import get_logger
 
-# Add console handler if not already configured
-if not logger.handlers:
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+logger = get_logger(__name__)
 
 # Try to import metadata for version checking
 try:
     import importlib.metadata
+    importlib_metadata_available = True
 except ImportError:
     importlib_metadata_available = False
     logger.debug("importlib.metadata not available")
-else:
-    importlib_metadata_available = True
 
 class DependencyError(Exception):
     """Custom exception for dependency-related errors."""
@@ -55,13 +49,16 @@ def _get_installed_version(package_name: str) -> Optional[str]:
         elif hasattr(module, 'version'):
             return module.version
         else:
-            # Try to get version from package metadata
-            if importlib_metadata_available:
-                try:
-                    return importlib.metadata.version(package_name)
-                except (importlib.metadata.PackageNotFoundError, AttributeError) as e:
-                    logger.debug(f"Package metadata not available for {package_name}: {e}")
-                    return None
+                        # Try to get version from package metadata
+                        if importlib_metadata_available:
+                            try:
+                                return importlib.metadata.version(package_name)
+                            except importlib.metadata.PackageNotFoundError as e:
+                                logger.debug(f"Package metadata not available for {package_name}: {e}")
+                                return None
+                            except Exception as e:
+                                logger.debug(f"Error getting package metadata for {package_name}: {e}")
+                                return None
     except ImportError as e:
         logger.debug(f"Could not determine version for {package_name}: {e}")
         return None
@@ -84,12 +81,12 @@ def _check_version_requirement(package_name: str, required_version: Optional[str
     """
     if not required_version:
         return True
-        
+         
     try:
         installed_version = _get_installed_version(package_name)
         if not installed_version:
             raise DependencyVersionError(f"{package_name} is installed but version could not be determined")
-            
+             
         try:
             import packaging.version
             import packaging.specifiers
@@ -101,9 +98,10 @@ def _check_version_requirement(package_name: str, required_version: Optional[str
                 raise DependencyVersionError(
                     f"{package_name} version {installed_version} does not satisfy requirement {required_version}"
                 )
-                logger.info(f"Version requirement satisfied: {package_name} {installed_version} meets {required_version}")
-                
+            
+            logger.info(f"Version requirement satisfied: {package_name} {installed_version} meets {required_version}")
             return True
+            
         except ImportError:
             logger.warning("packaging library not available, skipping version check")
             return True
@@ -168,8 +166,9 @@ def has_marker_dependencies(required_version: Optional[str] = None) -> bool:
     
     # Log summary
     if missing_dependencies:
-        logger.info(f"Missing marker dependencies: {', '.join(missing_dependencies)}")
-        logger.info("To install marker dependencies: pip install .[marker]")
+        logger.warning(f"Missing marker dependencies: {', '.join(missing_dependencies)}")
+        logger.warning("Marker PDF processor will be disabled. "
+                      "To enable marker functionality, install with: pip install .[marker]")
     
     if version_errors:
         for error in version_errors:
@@ -234,8 +233,9 @@ def has_nemotronparse_dependencies(required_version: Optional[str] = None) -> bo
 
     # Log summary
     if missing_dependencies:
-        logger.info(f"Missing nemotronparse dependencies: {', '.join(missing_dependencies)}")
-        logger.info("To install nemotronparse dependencies: pip install .[nemotronparse]")
+        logger.warning(f"Missing nemotronparse dependencies: {', '.join(missing_dependencies)}")
+        logger.warning("Nemotron-parse processor will be disabled. "
+                      "To enable nemotronparse functionality, install with: pip install .[nemotronparse]")
 
     if version_errors:
         for error in version_errors:
@@ -249,6 +249,9 @@ def has_nemotronparse_dependencies(required_version: Optional[str] = None) -> bo
     # Return False if there are critical errors to indicate dependency check failure
     return not missing_dependencies and not version_errors and not critical_errors
 
+
+
+
 def get_dependency_info() -> Dict[str, Dict[str, str]]:
     """Get detailed information about all optional dependencies.
     
@@ -260,7 +263,8 @@ def get_dependency_info() -> Dict[str, Dict[str, str]]:
     """
     all_dependencies = {
         'marker': ['marker_pdf', 'surya_ocr'],
-        'nemotronparse': ['openai']
+        'nemotronparse': ['openai'],
+        'tesseract': ['pytesseract', 'tesseract_binary']
     }
     
     dependency_info = {}
@@ -276,25 +280,39 @@ def get_dependency_info() -> Dict[str, Dict[str, str]]:
                 }
                 
                 try:
-                    module = importlib.import_module(package_name)
-                    package_info['available'] = True
-                    logger.debug(f"{package_name} is available for dependency info")
-                    
-                    # Try to get version
-                    try:
-                        package_info['version'] = _get_installed_version(package_name)
-                        logger.debug(f"{package_name} version: {package_info['version']}")
-                    except Exception as e:
-                        package_info['error'] = f"Version detection failed: {e}"
-                        logger.warning(f"Version detection failed for {package_name}: {e}")
+                    if package_name == 'tesseract_binary':
+                        # Special handling for Tesseract OCR binary
+                        from .tesseract_dependencies import _check_tesseract_binary_version
+                        tesseract_binary_version = _check_tesseract_binary_version()
+                        if tesseract_binary_version:
+                            package_info['available'] = True
+                            package_info['version'] = tesseract_binary_version
+                            logger.debug(f"{package_name} is available for dependency info")
+                            logger.debug(f"{package_name} version: {package_info['version']}")
+                        else:
+                            package_info['error'] = "Tesseract OCR binary not found"
+                            logger.debug(f"{package_name} not available")
+                    else:
+                        # Regular Python package handling
+                        module = importlib.import_module(package_name)
+                        package_info['available'] = True
+                        logger.debug(f"{package_name} is available for dependency info")
                         
+                        # Try to get version
+                        try:
+                            package_info['version'] = _get_installed_version(package_name)
+                            logger.debug(f"{package_name} version: {package_info['version']}")
+                        except Exception as e:
+                            package_info['error'] = f"Version detection failed: {e}"
+                            logger.warning(f"Version detection failed for {package_name}: {e}")
+                             
                 except ImportError as e:
                     package_info['error'] = f"Import failed: {e}"
                     logger.debug(f"Import failed for {package_name}: {e}")
                 except Exception as e:
                     package_info['error'] = f"Unexpected error: {e}"
                     logger.error(f"Unexpected error getting info for {package_name}: {e}")
-                    
+                
                 group_info[package_name] = package_info
                 
             dependency_info[group_name] = group_info
@@ -332,16 +350,26 @@ def log_dependency_status():
         # Provide installation guidance
         missing_marker = any(not p['available'] for p in dependency_info.get('marker', {}).values())
         missing_nemotronparse = any(not p['available'] for p in dependency_info.get('nemotronparse', {}).values())
+        missing_tesseract = any(not p['available'] for p in dependency_info.get('tesseract', {}).values())
         
-        if missing_marker or missing_nemotronparse:
-            logger.info("\nInstallation guidance:")
+        if missing_marker or missing_nemotronparse or missing_tesseract:
+            logger.warning("\nInstallation guidance:")
             if missing_marker:
-                logger.info("  To install marker dependencies: pip install .[marker]")
+                logger.warning("  Marker PDF processor disabled: pip install .[marker]")
             if missing_nemotronparse:
-                logger.info("  To install nemotronparse dependencies: pip install .[nemotronparse]")
+                logger.warning("  Nemotron-parse processor disabled: pip install .[nemotronparse]")
+            if missing_tesseract:
+                logger.warning("  Tesseract OCR disabled: pip install pytesseract and install Tesseract OCR binary")
+                logger.warning("     Tesseract OCR binary: https://github.com/tesseract-ocr/tesseract")
             if missing_marker and missing_nemotronparse:
-                logger.info("  To install all optional dependencies: pip install .[marker,nemotronparse]")
-                
+                logger.warning("  To install marker and nemotronparse: pip install .[marker,nemotronparse]")
+            if missing_marker and missing_tesseract:
+                logger.warning("  To install marker and Tesseract: pip install .[marker] pytesseract + Tesseract OCR binary")
+            if missing_nemotronparse and missing_tesseract:
+                logger.warning("  To install nemotronparse and Tesseract: pip install .[nemotronparse] pytesseract + Tesseract OCR binary")
+            if missing_marker and missing_nemotronparse and missing_tesseract:
+                logger.warning("  To install all optional dependencies: pip install .[marker,nemotronparse] pytesseract + Tesseract OCR binary")
+            
     except DependencyError:
         # Re-raise dependency errors
         raise
@@ -389,40 +417,58 @@ def get_installation_instructions() -> Dict[str, str]:
     Returns:
         Dictionary with installation instructions for each dependency group
     """
+    # Define standard installation instructions
+    standard_instructions = {
+        'marker': "pip install .[marker]",
+        'nemotronparse': "pip install .[nemotronparse]",
+        'tesseract': "pip install pytesseract and install Tesseract OCR binary",
+        'marker_nemotronparse': "pip install .[marker,nemotronparse]",
+        'nemotronparse_tesseract': "pip install .[nemotronparse] pytesseract and install Tesseract OCR binary",
+        'marker_tesseract': "pip install .[marker] pytesseract and install Tesseract OCR binary",
+        'all': "pip install .[marker,nemotronparse] pytesseract and install Tesseract OCR binary"
+    }
+    
     try:
         dependency_info = get_dependency_info()
         
+        # Check which dependencies are missing
+        marker_missing = any(not p['available'] for p in dependency_info.get('marker', {}).values())
+        nemotronparse_missing = any(not p['available'] for p in dependency_info.get('nemotronparse', {}).values())
+        tesseract_missing = any(not p['available'] for p in dependency_info.get('tesseract', {}).values())
+        
+        # Build instructions based on what's missing
         instructions = {}
         
-        # Check marker dependencies
-        marker_missing = any(not p['available'] for p in dependency_info.get('marker', {}).values())
         if marker_missing:
-            instructions['marker'] = "pip install .[marker]"
-        
-        # Check nemotronparse dependencies
-        nemotronparse_missing = any(not p['available'] for p in dependency_info.get('nemotronparse', {}).values())
+            instructions['marker'] = standard_instructions['marker']
         if nemotronparse_missing:
-            instructions['nemotronparse'] = "pip install .[nemotronparse]"
+            instructions['nemotronparse'] = standard_instructions['nemotronparse']
+        if tesseract_missing:
+            instructions['tesseract'] = standard_instructions['tesseract']
         
-        # Add combined instruction if both are missing
+        # Add combined instructions only if multiple dependencies are missing
         if marker_missing and nemotronparse_missing:
-            instructions['all'] = "pip install .[marker,nemotronparse]"
+            instructions['marker_nemotronparse'] = standard_instructions['marker_nemotronparse']
+        if marker_missing and tesseract_missing:
+            instructions['marker_tesseract'] = standard_instructions['marker_tesseract']
+        if nemotronparse_missing and tesseract_missing:
+            instructions['nemotronparse_tesseract'] = standard_instructions['nemotronparse_tesseract']
+        if marker_missing and nemotronparse_missing and tesseract_missing:
+            instructions['all'] = standard_instructions['all']
         
-        # Always include all instructions for completeness
+        # Always include basic instructions for completeness (as per original behavior)
         if 'marker' not in instructions:
-            instructions['marker'] = "pip install .[marker]"
+            instructions['marker'] = standard_instructions['marker']
         if 'nemotronparse' not in instructions:
-            instructions['nemotronparse'] = "pip install .[nemotronparse]"
+            instructions['nemotronparse'] = standard_instructions['nemotronparse']
+        if 'tesseract' not in instructions:
+            instructions['tesseract'] = standard_instructions['tesseract']
         if 'all' not in instructions:
-            instructions['all'] = "pip install .[marker,nemotronparse]"
+            instructions['all'] = standard_instructions['all']
             
         return instructions
         
     except Exception as e:
         logger.error(f"Error getting installation instructions: {e}")
-        # Return basic instructions even on error
-        return {
-            'marker': "pip install .[marker]",
-            'nemotronparse': "pip install .[nemotronparse]",
-            'all': "pip install .[marker,nemotronparse]"
-        }
+        # Return standard instructions even on error
+        return standard_instructions

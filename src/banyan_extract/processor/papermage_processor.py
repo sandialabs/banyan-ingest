@@ -4,9 +4,15 @@ from papermage.visualizers.visualizer import plot_entities_on_page
 import pathlib
 import numpy as np
 from typing import Union
+import logging
 
 from .processor import Processor
 from ..output.papermage_output import PaperMageOutput
+
+# Use centralized logging
+from ..utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class PaperMageProcessor(Processor):
     
@@ -14,11 +20,13 @@ class PaperMageProcessor(Processor):
         super().__init__()
         self.recipe = CoreRecipe()
 
-    def process_document(self, mode, filepath, options=None, colors=None, rotation_angle: Union[int, float] = 0):
+    def process_document(self, mode, filepath, options=None, colors=None, rotation_angle: Union[int, float] = 0,
+                       auto_detect_rotation: bool = False, 
+                       rotation_confidence_threshold: float = 0.7):
         # Note: PaperMage processor doesn't currently support rotation as it works directly with PDF files
         # For future implementation, we would need to rotate the PDF pages before processing
-        if rotation_angle != 0:
-            print(f"Warning: Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} will be ignored.")
+        if rotation_angle != 0 or auto_detect_rotation:
+            logger.warning(f"Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} and auto-detection will be ignored.")
         
         pdf_path = pathlib.Path(filepath)
 
@@ -48,10 +56,12 @@ class PaperMageProcessor(Processor):
         return PaperMageOutput(output)
 
 
-    def process_batch_documents(self, mode, filepaths, options=None, colors=None, rotation_angle: Union[int, float] = 0):
+    def process_batch_documents(self, mode, filepaths, options=None, colors=None, rotation_angle: Union[int, float] = 0,
+                               auto_detect_rotation: bool = False, 
+                               rotation_confidence_threshold: float = 0.7):
         # Note: PaperMage processor doesn't currently support rotation as it works directly with PDF files
-        if rotation_angle != 0:
-            print(f"Warning: Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} will be ignored.")
+        if rotation_angle != 0 or auto_detect_rotation:
+            print(f"Warning: Rotation is not currently supported for PaperMageProcessor. Angle {rotation_angle} and auto-detection will be ignored.")
         
         parent_path = pathlib.Path(filepaths)
         file_list = list(pathlib.Path(parent_path).glob('*.pdf'))

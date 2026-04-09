@@ -2,6 +2,43 @@
 
 All notable changes to the banyan-extract project will be documented in this file.
 
+## PR #4 - 2026-04-09
+
+### Documentation Improvements
+
+**Fixed Issues**:
+- Fixed typographical error in README.md (Line 60: "khe" -> "The")
+- Standardized code block formatting to use triple backticks consistently
+- Added Tesseract OCR version requirements to installation section
+- Specified actual example filenames instead of "example_XXX.py"
+- Used consistent code block formatting for all CLI commands
+- Added error handling example to Python API usage
+- Split API_DOCUMENTATION.md into focused files (processor_api.md, rotation_api.md, troubleshooting.md, cli_integration.md)
+- Standardized documentation format for all methods
+- Added cross-references to utility function documentation
+- Consolidated implementation status into single section
+- Added roadmap information to future plans
+- Added specific version numbers and dates to version information
+- Standardized on YYYY-MM-DD date format throughout
+
+**New Documentation Files**:
+- `docs/processor_api.md` - Focused processor API documentation
+- `docs/rotation_api.md` - Rotation feature documentation
+- `docs/troubleshooting.md` - Comprehensive troubleshooting guide
+- `docs/cli_integration.md` - CLI usage and integration documentation
+
+**Updated Files**:
+- `README.md` - Fixed typos, standardized formatting, added error handling examples
+- `docs/API_DOCUMENTATION.md` - Split into focused documentation files
+- `CHANGELOG.md` - Added documentation for this PR
+
+**Impact**:
+- Improved documentation clarity and organization
+- Better user experience with consistent formatting
+- Easier navigation through focused documentation files
+- Enhanced troubleshooting capabilities
+- More comprehensive API documentation
+
 ## PR #3 - 2026-03-24
 
 ### Added

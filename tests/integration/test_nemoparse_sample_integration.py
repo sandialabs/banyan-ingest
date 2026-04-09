@@ -32,7 +32,7 @@ class TestNemoparseSampleIntegration:
     """
 
     @pytest.mark.requires_nemotronparse
-    def test_sample_pdf_processing(self, temp_output_dir, test_data_dir):
+    def test_sample_pdf_processing(self, temp_output_dir, test_data_dir, configured_nemoparse_processor):
         """
         Test processing workflow and validate against expected sample.pdf outputs.
         
@@ -45,9 +45,10 @@ class TestNemoparseSampleIntegration:
         Args:
             temp_output_dir: Temporary directory for test outputs
             test_data_dir: Base test data directory
+            configured_nemoparse_processor: Pre-configured NemoparseProcessor instance
         """
-        # Create processor instance
-        processor = NemoparseProcessor()
+        # Use the configured processor instance
+        processor = configured_nemoparse_processor
         
         # Load expected bbox data from the sample.pdf expected output
         expected_output_dir = test_data_dir / "doc_outputs" / "nemotron"
@@ -91,19 +92,39 @@ class TestNemoparseSampleIntegration:
             logger.info("Nemoparse processing completed successfully")
         except Exception as e:
             logger.warning(f"Nemoparse API call failed: {e}")
-            pytest.skip(f"Nemoparse API call failed: {e}. This test requires a working Nemoparse endpoint.")
+            pytest.skip(f"Nemoparse API call failed: {e}. This test requires a working Nemoparse endpoint. "
+                       f"Please ensure NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL are set in your .env file. "
+                       f"See .env.example for the required format.")
         
         # Verify the output was created successfully and has content
         if output is None:
-            pytest.skip("Nemoparse processing returned None. This test requires a working Nemoparse endpoint.")
+            pytest.skip("Nemoparse processing returned None. This test requires a working Nemoparse endpoint. "
+                       "Please ensure NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL are properly configured in your .env file. "
+                       "Refer to .env.example for the correct format.")
         
         # Check if the API call actually returned meaningful data
-        if not output.text or len(output.text) == 0:
-            pytest.skip("Nemoparse API returned empty content. This test requires a working Nemoparse endpoint that returns valid data.")
+        # Nemoparse stores results in bboxdata, not text
+        if not output.bboxdata or len(output.bboxdata) == 0:
+            pytest.skip("Nemoparse API returned empty content. This test requires a working Nemoparse endpoint that returns valid data. "
+                       "Please verify your NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL are correctly configured in the .env file. "
+                       "See .env.example for the required configuration format.")
         
-        # Check if all text entries are empty
-        if all(not text or text.strip() == "" for text in output.text):
-            pytest.skip("Nemoparse API returned empty content. This test requires a working Nemoparse endpoint that returns valid data.")
+        # Check if all pages have no meaningful bbox entries
+        has_meaningful_data = False
+        for page_data in output.bboxdata:
+            if page_data and len(page_data) > 0:
+                # Check if this page has any entries with meaningful text
+                for entry in page_data:
+                    if entry and entry.get('text') and entry.get('text').strip() != "":
+                        has_meaningful_data = True
+                        break
+                if has_meaningful_data:
+                    break
+        
+        if not has_meaningful_data:
+            pytest.skip("Nemoparse API returned empty content. This test requires a working Nemoparse endpoint that returns valid data. "
+                       "Please check your NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL settings in the .env file. "
+                       "Refer to .env.example for the correct format.")
         
         # Verify the output was created successfully
         assert output is not None

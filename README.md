@@ -51,9 +51,21 @@ print(pytesseract.get_tesseract_version())
 
 ## Supported Tools and File Formats
 Currently we provide support for `marker` ([link here](https://github.com/datalab-to/marker)) and NVIDIA's `nemotron-parse` models ([link here](https://build.nvidia.com/nvidia/nemotron-parse)).
+
 To install the necessary dependencies for these tools please use `pip install .[marker]` or `pip install .[nemotronparse]` respectively.
 
 Note: please ensure you follow the guidelines and usage licenses of the tools.
+
+## Features
+
+### Tesseract OSD Rotation Detection
+- **Automatic rotation detection** using Tesseract OCR's Orientation and Script Detection (OSD)
+- **Configurable confidence threshold** for reliable results (default: 0.7)
+- **Graceful fallback** to 0° rotation when Tesseract is not available
+- **Support for standard angles**: 0°, 90°, 180°, and 270° detection
+- **Comprehensive error handling** with detailed logging
+
+**Requirements**: Tesseract OCR (version 4.0+) and `pytesseract` package for automatic detection.
 
 ### Using Nemotron-parse
 

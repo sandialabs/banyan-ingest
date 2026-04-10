@@ -1,37 +1,34 @@
-# Integration Test for Dependency Detection
-# This file contains integration tests for the enhanced dependency detection functions
+# Integration Tests for Dependency Detection
+# This file contains integration tests for the dependency detection functionality
 
 import pytest
 import sys
+from unittest.mock import patch, MagicMock
 
-# Add the source directory to the path
+# Add the source directory to the path so we can import the module
 sys.path.insert(0, '/projects/src')
 
 from banyan_extract.utils.dependencies import (
     has_marker_dependencies,
     has_nemotronparse_dependencies,
     get_dependency_info,
-    log_dependency_status
+    log_dependency_status,
+    get_installation_instructions,
+    DependencyError
 )
 
 
 def test_dependency_detection_integration():
-    """Test that dependency detection works in the context of the full application."""
-    # Test basic functionality
+    """Test basic dependency detection integration."""
+    # Test that the functions can be called without errors
     marker_available = has_marker_dependencies()
     nemotronparse_available = has_nemotronparse_dependencies()
     
-    # These should return boolean values
+    # Results should be boolean
     assert isinstance(marker_available, bool)
     assert isinstance(nemotronparse_available, bool)
     
-    # Test dependency info
-    dependency_info = get_dependency_info()
-    assert isinstance(dependency_info, dict)
-    assert 'marker' in dependency_info
-    assert 'nemotronparse' in dependency_info
-    
-    # Test that the functions can be called multiple times (caching test)
+    # Test caching behavior
     marker_available_2 = has_marker_dependencies()
     nemotronparse_available_2 = has_nemotronparse_dependencies()
     
@@ -39,25 +36,19 @@ def test_dependency_detection_integration():
     assert nemotronparse_available == nemotronparse_available_2
 
 
-def test_dependency_detection_with_version_requirements():
-    """Test dependency detection with version requirements.
+def test_dependency_detection_basic_functionality():
+    """Test basic dependency detection functionality.
     
-    This test validates that version requirements are handled gracefully.
-    The test checks the actual availability of dependencies in the test environment
-    and adjusts its logic accordingly, rather than making assumptions about what
-    should be available.
+    This test validates that dependency detection works correctly
+    by checking the actual availability of dependencies in the test environment.
     """
-    # Test with no version requirement (should work the same as basic test)
-    marker_no_version = has_marker_dependencies()
-    nemotronparse_no_version = has_nemotronparse_dependencies()
-    
-    # Test with version requirement (should handle gracefully)
-    marker_with_version = has_marker_dependencies(">=0.0.1")
-    nemotronparse_with_version = has_nemotronparse_dependencies(">=0.0.1")
+    # Test basic functionality
+    marker_available = has_marker_dependencies()
+    nemotronparse_available = has_nemotronparse_dependencies()
     
     # Debug output to understand the results
-    print(f"\nDebug - Marker: no_version={marker_no_version}, with_version={marker_with_version}")
-    print(f"Debug - Nemotronparse: no_version={nemotronparse_no_version}, with_version={nemotronparse_with_version}")
+    print(f"\nDebug - Marker: {marker_available}")
+    print(f"Debug - Nemotronparse: {nemotronparse_available}")
     
     # Get actual dependency information to understand the current state
     dependency_info = get_dependency_info()
@@ -66,53 +57,34 @@ def test_dependency_detection_with_version_requirements():
     openai_available = dependency_info['nemotronparse']['openai']['available']
     
     print(f"Actual dependency availability - marker_pdf: {marker_pdf_available}, surya_ocr: {surya_ocr_available}, openai: {openai_available}")
-  
-    # Test logic based on actual dependency availability
-    # For unavailable dependencies, results should always be the same
-    if not marker_pdf_available or not surya_ocr_available:
-        # If marker dependencies are not available, both checks should return False
-        assert marker_no_version is False, "Marker dependencies should be reported as unavailable"
-        assert marker_with_version is False, "Marker version check should return False when dependencies are unavailable"
-  
-    if not openai_available:
-        # If nemotronparse dependencies are not available, both checks should return False
-        assert nemotronparse_no_version is False, "Nemotronparse dependencies should be reported as unavailable"
-        assert nemotronparse_with_version is False, "Nemotronparse version check should return False when dependencies are unavailable"
     
-    # For available dependencies, we need to be more flexible
-    # The version check might fail due to missing packaging library or version mismatch
+    # Test logic based on actual dependency availability
+    if not marker_pdf_available or not surya_ocr_available:
+        # If marker dependencies are not available, should return False
+        assert marker_available is False, "Marker dependencies should be reported as unavailable"
+   
+    if not openai_available:
+        # If nemotronparse dependencies are not available, should return False
+        assert nemotronparse_available is False, "Nemotronparse dependencies should be reported as unavailable"
+     
+    # For available dependencies, should return True
     if marker_pdf_available and surya_ocr_available:
-        # If marker is available, version check should either pass or fail gracefully
-        assert isinstance(marker_with_version, bool), "Version check should return boolean result"
-        print(f"Marker dependency available - version check result: {marker_with_version}")
-        
-        # If version check fails, it should be a clean failure, not an exception
-        if not marker_with_version:
-            print("Marker version check failed (expected if version requirements not met)")
+        assert marker_available is True, "Marker dependencies should be reported as available"
     
     if openai_available:
-        # If nemotronparse is available, version check should either pass or fail gracefully
-        assert isinstance(nemotronparse_with_version, bool), "Version check should return boolean result"
-        print(f"Nemotronparse dependency available - version check result: {nemotronparse_with_version}")
-        
-        # If version check fails, it should be due to version mismatch, not an error
-        if not nemotronparse_with_version:
-            openai_info = dependency_info.get('nemotronparse', {}).get('openai', {})
-            print(f"OpenAI version info: {openai_info}")
-            
-            # The failure should be due to version mismatch, not import error
-            if openai_info.get('available'):
-                print("Version check failed due to version mismatch (expected behavior)")
-            else:
-                print("Version check failed due to import error (unexpected)")
-                assert False, "Version check should not fail due to import error when dependency is available"
+        assert nemotronparse_available is True, "Nemotronparse dependencies should be reported as available"
+    
+    # Verify that the results match the actual dependency availability
+    assert marker_available == (marker_pdf_available and surya_ocr_available)
+    assert nemotronparse_available == openai_available
 
 
 def test_dependency_info_structure():
-    """Test that dependency info has the expected structure."""
+    """Test that get_dependency_info returns the expected structure."""
     dependency_info = get_dependency_info()
     
-    # Check top-level structure
+    # Check that the result has the expected structure
+    assert isinstance(dependency_info, dict)
     assert 'marker' in dependency_info
     assert 'nemotronparse' in dependency_info
     
@@ -126,17 +98,22 @@ def test_dependency_info_structure():
     assert 'openai' in nemotronparse_deps
     
     # Check that each package has the expected fields
-    for group_name, packages in dependency_info.items():
-        for package_name, package_info in packages.items():
-            assert 'available' in package_info
-            assert 'version' in package_info
-            assert 'error' in package_info
-            assert isinstance(package_info['available'], bool)
+    for package_name, package_info in marker_deps.items():
+        assert 'available' in package_info
+        assert 'version' in package_info
+        assert 'error' in package_info
+        assert isinstance(package_info['available'], bool)
+    
+    for package_name, package_info in nemotronparse_deps.items():
+        assert 'available' in package_info
+        assert 'version' in package_info
+        assert 'error' in package_info
+        assert isinstance(package_info['available'], bool)
 
 
 def test_log_dependency_status():
     """Test that log_dependency_status runs without errors."""
-    # This should not raise any exceptions
+    # This should not raise an exception
     try:
         log_dependency_status()
         assert True  # If we get here, the function worked
@@ -145,111 +122,138 @@ def test_log_dependency_status():
 
 
 def test_caching_behavior_integration():
-    """Test that caching works correctly in the integration context."""
+    """Test that caching works correctly in integration context."""
     # Clear cache first
     has_marker_dependencies.cache_clear()
     has_nemotronparse_dependencies.cache_clear()
     
     # First calls
-    result1 = has_marker_dependencies()
-    result2 = has_nemotronparse_dependencies()
+    marker_1 = has_marker_dependencies()
+    nemotronparse_1 = has_nemotronparse_dependencies()
     
-    # Second calls (should use cache)
-    result3 = has_marker_dependencies()
-    result4 = has_nemotronparse_dependencies()
+    # Second calls should use cache
+    marker_2 = has_marker_dependencies()
+    nemotronparse_2 = has_nemotronparse_dependencies()
     
     # Results should be identical
-    assert result1 == result3
-    assert result2 == result4
+    assert marker_1 == marker_2
+    assert nemotronparse_1 == nemotronparse_2
 
 
 def test_error_handling_integration():
-    """Test that the dependency system handles errors gracefully in integration context."""
-    # Test that basic functions don't crash
-    try:
-        marker_available = has_marker_dependencies()
-        nemotronparse_available = has_nemotronparse_dependencies()
-        dependency_info = get_dependency_info()
+    """Test error handling in integration context."""
+    # Test that functions handle errors gracefully
+    
+    # Test with mocked import errors
+    with patch('banyan_extract.utils.dependencies.importlib.import_module') as mock_import:
+        # Mock ImportError for all packages
+        mock_import.side_effect = ImportError("Mocked import error")
         
-        # These should all be valid results
-        assert isinstance(marker_available, bool)
-        assert isinstance(nemotronparse_available, bool)
-        assert isinstance(dependency_info, dict)
+        # Clear cache to ensure fresh calls
+        has_marker_dependencies.cache_clear()
+        has_nemotronparse_dependencies.cache_clear()
         
-    except Exception as e:
-        pytest.fail(f"Dependency functions should not crash: {e}")
+        # Should return False without crashing
+        marker_result = has_marker_dependencies()
+        nemotronparse_result = has_nemotronparse_dependencies()
+        
+        assert marker_result is False
+        assert nemotronparse_result is False
 
 
 def test_safe_dependency_check_integration():
-    """Test safe dependency checking in integration context."""
+    """Test safe_dependency_check in integration context."""
     from banyan_extract.utils.dependencies import safe_check_dependency
     
-    # Test with core Python module (should always be available)
+    # Test with existing package
     result = safe_check_dependency('sys')
     assert result is True
     
-    # Test with likely non-existent module
-    result = safe_check_dependency('nonexistent_module_xyz_123')
+    # Test with non-existent package
+    result = safe_check_dependency('nonexistent_package_12345')
+    assert result is False
+    
+    # Test with fallback mechanism
+    result = safe_check_dependency('nonexistent_package_12345', fallback=True)
     assert result is False
 
 
 def test_installation_instructions_integration():
-    """Test installation instructions in integration context."""
-    from banyan_extract.utils.dependencies import get_installation_instructions
-    
-    # Should always return valid instructions
+    """Test getting installation instructions in integration context."""
     instructions = get_installation_instructions()
+    
+    # Should always return instructions
     assert isinstance(instructions, dict)
-    assert len(instructions) > 0
+    assert 'marker' in instructions
+    assert 'nemotronparse' in instructions
 
 
 def test_error_recovery_integration():
-    """Test that the system can recover from dependency check errors."""
-    # Clear cache to ensure fresh checks
-    has_marker_dependencies.cache_clear()
-    has_nemotronparse_dependencies.cache_clear()
+    """Test error recovery in integration context."""
+    # Test that functions can recover from errors
     
-    # First check
-    result1 = has_marker_dependencies()
-    result2 = has_nemotronparse_dependencies()
-    
-    # Second check (should use cache and not fail)
-    result3 = has_marker_dependencies()
-    result4 = has_nemotronparse_dependencies()
-    
-    # Results should be consistent
-    assert result1 == result3
-    assert result2 == result4
+    # Test get_dependency_info with mocked errors
+    with patch('banyan_extract.utils.dependencies.importlib.import_module') as mock_import:
+        # Mock various types of errors
+        mock_import.side_effect = Exception("Unexpected error")
+        
+        # Should handle the error gracefully
+        dependency_info = get_dependency_info()
+        
+        # Should still return a valid structure
+        assert isinstance(dependency_info, dict)
+        assert 'marker' in dependency_info
+        assert 'nemotronparse' in dependency_info
 
 
 def test_dependency_info_completeness():
-    """Test that dependency info contains all expected information."""
+    """Test that dependency info is complete and consistent."""
     dependency_info = get_dependency_info()
     
-    # Check structure
-    assert 'marker' in dependency_info
-    assert 'nemotronparse' in dependency_info
+    # Check that all expected packages are present
+    expected_packages = ['marker_pdf', 'surya_ocr', 'openai']
     
-    # Check marker dependencies
-    marker_deps = dependency_info['marker']
-    assert 'marker_pdf' in marker_deps
-    assert 'surya_ocr' in marker_deps
+    all_packages = []
+    for group in dependency_info.values():
+        all_packages.extend(group.keys())
     
-    # Check nemotronparse dependencies
-    nemotronparse_deps = dependency_info['nemotronparse']
-    assert 'openai' in nemotronparse_deps
+    for package in expected_packages:
+        assert package in all_packages, f"Expected package {package} not found in dependency info"
+
+
+def test_dependency_consistency():
+    """Test that dependency detection is consistent across multiple calls."""
+    # Clear cache
+    has_marker_dependencies.cache_clear()
+    has_nemotronparse_dependencies.cache_clear()
     
-    # Check each package has expected fields
-    for group_name, packages in dependency_info.items():
-        for package_name, package_info in packages.items():
-            assert 'available' in package_info
-            assert 'version' in package_info
-            assert 'error' in package_info
-            assert isinstance(package_info['available'], bool)
-            
-            # If available, version should be string or None
-            if package_info['available']:
-                assert package_info['version'] is None or isinstance(package_info['version'], str)
-            
-            # Error should be string or None
-            assert package_info['error'] is None or isinstance(package_info['error'], str)
+    # Make multiple calls
+    results = []
+    for i in range(3):
+        marker = has_marker_dependencies()
+        nemotronparse = has_nemotronparse_dependencies()
+        results.append((marker, nemotronparse))
+    
+    # All results should be identical
+    for result in results:
+        assert result == results[0], "Dependency detection results should be consistent"
+
+
+def test_error_handling_with_critical_errors():
+    """Test error handling with critical errors."""
+    # Test that functions handle critical errors gracefully
+    
+    with patch('banyan_extract.utils.dependencies.importlib.import_module') as mock_import:
+        # Mock a critical error
+        mock_import.side_effect = Exception("Critical error")
+        
+        # Clear cache
+        has_marker_dependencies.cache_clear()
+        has_nemotronparse_dependencies.cache_clear()
+        
+        # Should return False without crashing
+        marker_result = has_marker_dependencies()
+        nemotronparse_result = has_nemotronparse_dependencies()
+        
+        assert marker_result is False
+        assert nemotronparse_result is False

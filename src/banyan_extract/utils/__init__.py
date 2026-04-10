@@ -6,8 +6,7 @@ from .dependencies import (
     has_nemotronparse_dependencies,
     get_dependency_info,
     log_dependency_status,
-    DependencyError,
-    DependencyVersionError
+    DependencyError
 )
 
 from .tesseract_dependencies import (

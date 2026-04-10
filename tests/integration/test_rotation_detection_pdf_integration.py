@@ -51,8 +51,6 @@ class TestRotationDetectionWithActualPDF:
             for i, image in enumerate(images):
                 assert isinstance(image, Image.Image)
                 assert image.size[0] > 0 and image.size[1] > 0
-                
-            return images  # Return images for potential use in other tests
             
         except Exception as e:
             # If PDF conversion fails, skip this test

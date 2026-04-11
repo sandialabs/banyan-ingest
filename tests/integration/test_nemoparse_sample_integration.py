@@ -67,6 +67,8 @@ class TestNemoparseSampleIntegration:
             # Try to process with real PDF conversion first
             try:
                 output = processor.process_document(str(sample_pdf_path))
+                print("HERE!")
+                print(output.bboxdata)
             except Exception as pdf_error:
                 # If PDF conversion fails (e.g., poppler not installed), 
                 # fall back to using the expected bbox data but still make real API calls

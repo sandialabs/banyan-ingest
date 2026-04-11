@@ -16,6 +16,73 @@ This document provides guidelines for AI agents working on the banyan-extract co
 
 **Date Stamps**: Include `YYYY-MM-DD` dates in doc filenames or section headers to track staleness.
 
+## Agent-Specific Guidelines
+
+### .env File Handling (ALL AGENTS)
+
+**STRICT RULES FOR ALL AGENTS:**
+1. Agents may READ .env files but NEVER MODIFY or DELETE them
+2. This applies to all agents without exception
+3. Any testing that requires .env configuration should use temporary files or ask for user permission
+
+### Feature-Implementer Agent
+
+**Strict Guidelines:**
+1. **NEVER modify or delete .env files - read only**: Agents may read .env files but never modify or delete them
+2. **No Special Characters**: Never use unicode, special symbols, emojis, or non-standard characters in code or output
+3. **Simplicity First**: Prefer simpler implementations over complex logic
+4. **Minimal Dependency Checking**: Avoid excessive dependency checking unless explicitly required
+5. **Focused Testing**: Write comprehensive but focused tests targeting key functionality
+6. **Proportional Testing**: Avoid excessive tests for small features (e.g., 100+ tests for a couple lines of code)
+7. **Relative Paths Only**: Never use absolute paths for sample files in tests
+8. **Code Quality**: Prioritize clean, maintainable, and well-documented code
+9. **Scope Adherence**: Implement only the exact feature requested, no extra functionality
+
+### Code-Review Agent
+
+**Strict Guidelines:**
+1. **NEVER modify or delete .env files - read only**: Agents may read .env files but never modify or delete them
+2. **No Special Characters**: Ensure no unicode, special symbols, emojis, or non-standard characters in code
+3. **Simplicity Review**: Favor simpler solutions and flag overly complex implementations
+4. **Test Quality**: Verify tests are comprehensive but not excessive for the feature size
+5. **Path Validation**: Ensure no absolute paths are used in test files
+6. **Scope Validation**: Confirm implementation matches exact requirements, no scope creep
+
+### Planning Agent
+
+**Strict Guidelines:**
+1. **NEVER modify or delete .env files - read only**: Agents may read .env files but never modify or delete them
+2. **No Special Characters**: Avoid unicode, special symbols, emojis in planning documents
+3. **Simplicity First**: Plan for the simplest viable implementation first - always prefer simpler solutions over complex architectures
+4. **Avoid Overly Complex Architectures**: Only propose complex solutions when absolutely necessary and provide clear justification
+5. **Proportional Testing**: Plan test coverage that matches feature complexity - avoid excessive testing for simple features
+6. **Relative Paths Only**: Never use absolute paths for sample files in test plans - always use relative paths from project root
+7. **Minimal Dependencies**: Avoid adding unnecessary dependencies in plans
+8. **Clear Scope**: Define exact feature boundaries to prevent scope creep
+9. **Justify Complexity**: Any complex solution must include clear justification explaining why simpler approaches won't work
+
+**Test Planning Guidelines:**
+- **Simple Features (1-2 functions)**: 3-5 focused tests covering main functionality and edge cases
+- **Medium Features (3-5 functions)**: 5-10 tests covering main paths, edge cases, and error handling
+- **Complex Features (6+ functions)**: 10-20 tests covering comprehensive scenarios, but avoid excessive testing
+- **Avoid**: Planning 100+ tests for simple features or testing every minor implementation detail
+
+**Path Usage Guidelines:**
+- **Test Data Location**: All test data should be referenced using relative paths from project root
+- **Test Data Organization**: Plan for test data to be organized in `tests/data/` directory structure
+- **No Absolute Paths**: Never use absolute paths like `/home/user/project/tests/data/` - always use `tests/data/`
+- **Cross-Platform Compatibility**: Ensure paths work on all platforms (Windows, Linux, macOS)
+
+**Implementation Complexity Guidelines:**
+- **Simple Implementation**: Single function/method, straightforward logic, minimal dependencies
+- **Medium Implementation**: Multiple related functions, some conditional logic, moderate dependencies
+- **Complex Implementation**: Multiple components, complex workflows, significant dependencies - requires detailed justification
+
+**Alignment with Other Agents:**
+- Planning agent guidelines should align with Feature-Implementer agent's simplicity focus
+- Planning agent guidelines should align with Code-Review agent's proportional testing approach
+- All agents should enforce relative path usage consistently
+
 ## Claude Code Agents
 
 **test-report-runner**: Run frequently after code changes to verify tests pass.

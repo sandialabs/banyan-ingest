@@ -4,6 +4,7 @@
 import pytest
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Base directory for test data
 TEST_DATA_DIR = Path(__file__).parent / "data"
@@ -90,6 +91,67 @@ def nemoparse_processor():
     pytest.importorskip("banyan_extract.processor.nemoparse_processor")
     from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
     return NemoparseProcessor()
+
+
+@pytest.fixture
+def configured_nemoparse_processor():
+    """Create a configured NemoparseProcessor instance for testing.
+    
+    This fixture imports the processor, gets configuration from .env file using python-dotenv,
+    and creates a configured instance. Skips the test if configuration is missing.
+    
+    Note: Dependency checking is handled automatically by the @pytest.mark.requires_nemotronparse
+    marker and the automatic test filtering system.
+    
+    Returns:
+        Configured NemoparseProcessor instance
+    """
+
+    
+    # Import the processor with proper error handling
+    try:
+        from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
+    except ImportError as e:
+        pytest.skip(f"Failed to import NemoparseProcessor: {e}")
+    
+    # Get configuration from .env file using python-dotenv
+    def get_nemoparse_config_from_dotenv():
+        """Get Nemoparse configuration from .env file."""
+        # Try to load .env file from project root
+        env_path = Path(__file__).parent.parent / ".env"
+        
+        if not env_path.exists():
+            return None
+        
+        # Load the .env file
+        load_result = load_dotenv(env_path)
+        
+        if not load_result:
+            return None
+        
+        # Get configuration from environment (now loaded from .env)
+        endpoint_url = os.environ.get('NEMOPARSE_ENDPOINT', None)
+        model_name = os.environ.get('NEMOPARSE_MODEL', None)
+        
+        return {
+            'endpoint_url': endpoint_url,
+            'model_name': model_name
+        }
+    
+    config = get_nemoparse_config_from_dotenv()
+    
+    # Skip the test with a clear message if .env file is missing or configuration is incomplete
+    if config is None:
+        pytest.skip("Nemoparse configuration missing. .env file not found or could not be loaded.")
+    
+    if not config['endpoint_url'] or not config['model_name']:
+        pytest.skip("Nemoparse configuration missing. .env file must contain NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL.")
+    
+    # Create and return a configured NemoparseProcessor instance
+    return NemoparseProcessor(
+        endpoint_url=config['endpoint_url'],
+        model_name=config['model_name']
+    )
 
 @pytest.fixture
 def marker_processor():

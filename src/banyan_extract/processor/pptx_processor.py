@@ -13,13 +13,6 @@ from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-try:
-    from surya.texify import TexifyPredictor # May need to find an alternative
-    USE_OCR = True
-except ImportError as e:
-    USE_OCR = False
-    logger.warning(f"Surya OCR not installed; OCR not available for PPTX processing: {e}")
-
 from pptx import Presentation
 from pptx.shapes.group import GroupShape
 
@@ -28,34 +21,14 @@ from ..output.pptx_output import PptxOutput
 from ..ocr.nemotron_ocr import NemotronOCR
 
 
-try:
-    class MarkdownTexifyPredictor(TexifyPredictor):
-        def fix_fences(self, text: str) -> str:
-            text = re.sub(r'<math display="block">(.*?)</math>',r'$$\1$$', text, flags=re.DOTALL)
-            text = re.sub(r'<math>(.*?)</math>',r'$\1$', text, flags=re.DOTALL)
-            if re.search(r'<math display="block">', text):
-                text = ""
-            if re.search(r'<math>', text):
-                text = ""
-            return text
-except ImportError as e:
-    logger.warning(f"Failed to create MarkdownTexifyPredictor class: {e}")
-    class MarkdownTexifyPredictor:
-        pass
-except Exception as e:
-    logger.error(f"Unexpected error creating MarkdownTexifyPredictor: {e}")
-    class MarkdownTexifyPredictor:
-        pass
-
-
 class PptxProcessor(Processor):
     
-    def __init__(self, ocr_backend="surya", nemotron_endpoint="", nemotron_model="nvidia/nemoretriever-parse"):
+    def __init__(self, ocr_backend="nemotron", nemotron_endpoint="", nemotron_model="nvidia/nemoretriever-parse"):
         """
         Initialize PPTX processor with OCR backend selection.
         
         Args:
-            ocr_backend: Which OCR backend to use ('surya' or 'nemotron')
+            ocr_backend: Which OCR backend to use ('surya' or 'nemotron'). Default is 'nemotron'.
             nemotron_endpoint: URL for Nemotron parse endpoint (if using nemotron)
             nemotron_model: Model name for Nemotron OCR
         """
@@ -71,28 +44,59 @@ class PptxProcessor(Processor):
                     model_name=nemotron_model
                 )
                 self.ocr_available = True
+                logger.debug("Nemotron OCR initialized successfully")
             except ImportError as e:
-                logger.warning(f"Nemotron OCR dependencies not available: {e}")
-                logger.warning("To enable Nemotron OCR for PPTX processing, install nemotronparse dependencies: pip install .[nemotronparse]")
+                logger.warning(f"Nemotron OCR dependencies not available: {e}. To enable Nemotron OCR for PPTX processing, install nemotronparse dependencies: pip install .[nemotronparse]")
                 self.ocr_available = False
             except ValueError as e:
-                logger.error(f"Invalid Nemotron OCR configuration: {e}")
+                logger.error(f"Invalid Nemotron OCR configuration: {e}. Please check your endpoint URL and model name configuration")
+                self.ocr_available = False
+            except AttributeError as e:
+                logger.error(f"Nemotron OCR attribute error: {e}. This may indicate a version mismatch or corrupted installation")
+                self.ocr_available = False
+            except RuntimeError as e:
+                logger.error(f"Nemotron OCR runtime error: {e}. Check if the Nemotron service is running and accessible")
                 self.ocr_available = False
             except Exception as e:
-                logger.error(f"Failed to initialize Nemotron OCR: {e}")
+                logger.error(f"Unexpected error initializing Nemotron OCR: {e}. Please check your installation and configuration")
                 self.ocr_available = False
-        else:  # Default to Surya
+        elif ocr_backend == "surya":
+            # Lazy import of Surya - only attempt import when explicitly requested
             try:
+                from surya.texify import TexifyPredictor
+                 
+                # Define MarkdownTexifyPredictor class inline
+                class MarkdownTexifyPredictor(TexifyPredictor):
+                    def fix_fences(self, text: str) -> str:
+                        text = re.sub(r'<math display="block">(.*?)</math>',r'$$\1$$', text, flags=re.DOTALL)
+                        text = re.sub(r'<math>(.*?)</math>',r'$\1$', text, flags=re.DOTALL)
+                        if re.search(r'<math display="block">', text):
+                            text = ""
+                        if re.search(r'<math>', text):
+                            text = ""
+                        return text
+                 
                 self.ocr_backend = MarkdownTexifyPredictor()
-                self.ocr_available = USE_OCR
+                self.ocr_available = True
+                logger.debug("Surya OCR initialized successfully")
             except ImportError as e:
                 self.ocr_available = False
-                logger.warning(f"Surya OCR not installed; OCR not available for PPTX processing: {e}")
-                logger.warning("To enable Surya OCR for PPTX processing, install marker dependencies: pip install .[marker]")
+                logger.warning(f"Surya OCR not installed; OCR not available for PPTX processing: {e}. To enable Surya OCR for PPTX processing, install marker dependencies: pip install .[marker]")
+            except NameError as e:
+                self.ocr_available = False
+                logger.error(f"Surya OCR name error: {e}. This may indicate missing Surya dependencies or version incompatibility")
+            except AttributeError as e:
+                self.ocr_available = False
+                logger.error(f"Surya OCR attribute error: {e}. This may indicate a version mismatch or corrupted installation")
+            except RuntimeError as e:
+                self.ocr_available = False
+                logger.error(f"Surya OCR runtime error: {e}. Check if Surya models are properly downloaded and accessible")
             except Exception as e:
                 self.ocr_available = False
-                logger.error(f"Unexpected error initializing Surya OCR: {e}")
-                logger.warning("Surya OCR initialization failed. PPTX processing will continue without OCR.")
+                logger.error(f"Unexpected error initializing Surya OCR: {e}. Please check your Surya installation and configuration")
+        else:
+            logger.debug(f"Unknown OCR backend: {ocr_backend}. Defaulting to no OCR.")
+            self.ocr_available = False
 
     def ocr_image(self, image):
         """
@@ -126,13 +130,22 @@ class PptxProcessor(Processor):
                     return ocr_output.text
                 return ""
         except ValueError as e:
-            logger.error(f"OCR validation error: {e}")
+            logger.error(f"OCR validation error: {e}. Please check the image format and content")
             return ""
         except AttributeError as e:
-            logger.error(f"OCR backend attribute error: {e}")
+            logger.error(f"OCR backend attribute error: {e}. This may indicate a corrupted OCR backend instance")
+            return ""
+        except TypeError as e:
+            logger.error(f"OCR type error: {e}. Please check the image type and OCR backend compatibility")
+            return ""
+        except RuntimeError as e:
+            logger.error(f"OCR runtime error: {e}. Check if OCR service is running and accessible")
+            return ""
+        except MemoryError as e:
+            logger.error(f"OCR memory error: {e}. The image may be too large for OCR processing")
             return ""
         except Exception as e:
-            logger.error(f"OCR failed: {e}")
+            logger.error(f"Unexpected OCR failure: {e}. Please check your OCR backend configuration and image content")
             return ""
 
     def process_image(self, image):
@@ -194,8 +207,20 @@ class PptxProcessor(Processor):
                                 image_ocr = self.ocr_image(image)
                                 slide_text.append(image_ocr)
                                 images[-1].append(image)
+                        except ValueError as img_e:
+                            logger.debug(f"Invalid image format in slide: {img_e}. Skipping image due to format issues")
+                            continue
+                        except AttributeError as img_e:
+                            logger.debug(f"Image attribute error in slide: {img_e}. Skipping image due to missing attributes")
+                            continue
+                        except TypeError as img_e:
+                            logger.debug(f"Image type error in slide: {img_e}. Skipping image due to type mismatch")
+                            continue
+                        except MemoryError as img_e:
+                            logger.warning(f"Memory error processing image in slide: {img_e}. Skipping image due to memory constraints")
+                            continue
                         except Exception as img_e:
-                            logger.warning(f"Failed to process image in slide: {img_e}")
+                            logger.debug(f"Unexpected error processing image in slide: {img_e}. Skipping image due to processing error")
                             continue
                     if "GROUP" in str(shape.shape_type):
                         for sub_shape in shape.shapes:
@@ -206,8 +231,20 @@ class PptxProcessor(Processor):
                                         image_ocr = self.ocr_image(image)
                                         slide_text.append(image_ocr)
                                         images[-1].append(image)
+                                except ValueError as img_e:
+                                    logger.debug(f"Invalid image format in grouped shape: {img_e}. Skipping grouped image due to format issues")
+                                    continue
+                                except AttributeError as img_e:
+                                    logger.debug(f"Image attribute error in grouped shape: {img_e}. Skipping grouped image due to missing attributes")
+                                    continue
+                                except TypeError as img_e:
+                                    logger.debug(f"Image type error in grouped shape: {img_e}. Skipping grouped image due to type mismatch")
+                                    continue
+                                except MemoryError as img_e:
+                                    logger.warning(f"Memory error processing grouped image: {img_e}. Skipping grouped image due to memory constraints")
+                                    continue
                                 except Exception as img_e:
-                                    logger.warning(f"Failed to process grouped image in slide: {img_e}")
+                                    logger.debug(f"Unexpected error processing grouped image: {img_e}. Skipping grouped image due to processing error")
                                     continue
 
                             if sub_shape.has_text_frame:
@@ -226,8 +263,14 @@ class PptxProcessor(Processor):
         except ValueError as e:
             logger.error(f"Invalid PPTX file format: {filepath}")
             raise ValueError(f"Invalid PPTX file format: {filepath}") from e
+        except IOError as e:
+            logger.error(f"IO error reading PPTX document {filepath}: {e}")
+            raise IOError(f"Failed to read PPTX document {filepath}: {e}") from e
+        except OSError as e:
+            logger.error(f"OS error processing PPTX document {filepath}: {e}")
+            raise OSError(f"OS error processing PPTX document {filepath}: {e}") from e
         except Exception as e:
-            logger.error(f"Error processing PPTX document {filepath}: {e}")
+            logger.error(f"Unexpected error processing PPTX document {filepath}: {e}")
             raise ValueError(f"Failed to process PPTX document {filepath}: {e}") from e
 
     def process_batch_documents(self, filepaths, rotation_angle: Union[int, float] = 0,
@@ -275,8 +318,14 @@ class PptxProcessor(Processor):
             except ValueError as e:
                 logger.error(f"Invalid PPTX file format in batch: {filepath}")
                 raise ValueError(f"Invalid PPTX file format in batch: {filepath}") from e
+            except IOError as e:
+                logger.error(f"IO error reading PPTX file {filepath} in batch: {e}")
+                raise IOError(f"Failed to read PPTX file {filepath} in batch: {e}") from e
+            except OSError as e:
+                logger.error(f"OS error processing PPTX file {filepath} in batch: {e}")
+                raise OSError(f"OS error processing PPTX file {filepath} in batch: {e}") from e
             except Exception as e:
-                logger.error(f"Failed to process PPTX file {filepath} in batch: {e}")
+                logger.error(f"Unexpected error processing PPTX file {filepath} in batch: {e}")
                 raise ValueError(f"Failed to process PPTX file {filepath} in batch: {e}") from e
         
         return file_outputs

@@ -61,18 +61,24 @@ def parse_arguments():
 Examples:
   # Process a single PDF file
   python -m banyan_extract input.pdf output_dir/
-  
+ 
   # Process all files in a directory
   python -m banyan_extract input_dir/ output_dir/ --is_input_dir
-  
+ 
   # Use specific backend
   python -m banyan_extract input.pdf output_dir/ --backend nemoparse
-  
+ 
   # Enable rotation detection
   python -m banyan_extract input.pdf output_dir/ --auto_detect_rotation
-  
+ 
   # Manual rotation with bounding boxes
   python -m banyan_extract input.pdf output_dir/ --rotation_angle 90 --draw_bboxes
+  
+  # Process PPTX with default Nemotron OCR backend
+  python -m banyan_extract presentation.pptx output_dir/
+  
+  # Process PPTX with Surya OCR backend
+  python -m banyan_extract presentation.pptx output_dir/ --pptx_ocr_backend surya
         """
     )
     
@@ -112,8 +118,8 @@ Examples:
                             "Default: 0.7")
     
     # Add PPTX-specific arguments
-    parser.add_argument("--pptx_ocr_backend", default="surya", type=str, 
-                       help="OCR backend for PPTX processing: surya or nemotron. Default: surya")
+    parser.add_argument("--pptx_ocr_backend", default="nemotron", type=str, 
+                       help="OCR backend for PPTX processing: surya or nemotron. Default: nemotron")
     parser.add_argument("--pptx_nemotron_endpoint", default="", type=str, 
                        help="Nemotron endpoint URL for PPTX OCR (if using nemotron backend)")
     parser.add_argument("--pptx_nemotron_model", default="", type=str, 
@@ -131,6 +137,10 @@ Examples:
         validate_rotation_confidence_threshold(args.rotation_confidence_threshold)
     except ValueError as e:
         parser.error(str(e))
+    
+    # Validate PPTX OCR backend argument
+    if args.pptx_ocr_backend not in ["surya", "nemotron"]:
+        parser.error(f"Invalid PPTX OCR backend: {args.pptx_ocr_backend}. Must be 'surya' or 'nemotron'")
     
     # Warn if both manual rotation and auto detection are specified
     if args.auto_detect_rotation and args.rotation_angle != 0:
@@ -196,49 +206,6 @@ def main():
                 raise ValueError(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).")
                 sys.exit(1)
 
-        # Initialize the appropriate processor
-        document_processor = None
-        if backend == "nemoparse":
-            if len(endpoint) == 0:
-                config_values = dotenv_values(args.config_file)
-                if not config_values:
-                    raise ValueError(f"Config file {args.config_file} not found or empty")
-                endpoint = config_values.get("NEMOPARSE_ENDPOINT")
-                model_name = config_values.get("NEMOPARSE_MODEL")
-                if endpoint:
-                    logger.info(f"Using endpoint: {endpoint}")
-                if model_name:
-                    logger.info(f"Using model: {model_name}")
-
-            if endpoint != "":
-                document_processor = NemoparseProcessor(
-                    endpoint_url=endpoint, 
-                    model_name=model_name, 
-                    sort_by_position=args.sort_by_position
-                )
-            else:
-                raise ValueError("Missing nemotron-parse endpoint URL!")
-        elif backend == "marker":
-            try:
-                document_processor = MarkerProcessor()
-            except NameError as e:
-                logger.error("MarkerProcessor not available. Marker PDF processing requires additional dependencies.")
-                logger.warning("To enable marker functionality, install with: pip install .[marker]")
-                raise ImportError("MarkerProcessor not available. Install marker dependencies with: pip install .[marker]") from e
-        elif backend == "pptx":
-            try:
-                document_processor = PptxProcessor(
-                    ocr_backend=args.pptx_ocr_backend,
-                    nemotron_endpoint=args.pptx_nemotron_endpoint or args.endpoint,
-                    nemotron_model=args.pptx_nemotron_model or args.model_name
-                )
-            except NameError as e:
-                logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
-                logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
-                raise ImportError("PptxProcessor not available. Install pptx dependencies.") from e
-        else:
-            raise ValueError(f"Unknown backend: {backend}")
-
         if args.is_input_dir:
             input_directory = args.input_file
 
@@ -258,11 +225,20 @@ def main():
                         if filepath.lower().endswith('.pptx'):
                             if args.re_run or args.temperature != 0.0:
                                 logger.warning("WARNING: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.", file=sys.stderr)
-                            processor = PptxProcessor(
-                                ocr_backend=args.pptx_ocr_backend,
-                                nemotron_endpoint=args.pptx_nemotron_endpoint or args.endpoint,
-                                nemotron_model=args.pptx_nemotron_model or args.model_name
-                            )
+                                try:
+                                    processor = PptxProcessor(
+                                        ocr_backend=args.pptx_ocr_backend,
+                                        nemotron_endpoint=args.pptx_nemotron_endpoint or args.endpoint,
+                                        nemotron_model=args.pptx_nemotron_model or args.model_name
+                                    )
+                                except (NameError, ImportError) as e:
+                                    logger.error(f"Failed to initialize PptxProcessor for file {filepath}: {e}")
+                                    logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
+                                    if args.pptx_ocr_backend == "nemotron":
+                                        logger.warning("For Nemotron OCR support, install with: pip install .[nemotronparse]")
+                                    elif args.pptx_ocr_backend == "surya":
+                                        logger.warning("For Surya OCR support, install with: pip install .[marker]")
+                                    raise ImportError(f"PPTX processing dependencies are missing for file {filepath}") from e
                         else:  # Default to nemoparse for PDF and other files
                             if len(endpoint) == 0:
                                 config_values = dotenv_values(args.config_file)
@@ -313,6 +289,64 @@ def main():
                     raise
         else:
             filename = args.input_file
+            if filename.lower().endswith('.pptx'):
+                backend = "pptx"
+            elif filename.lower().endswith('.pdf'):
+                backend = "nemoparse"
+            else:
+                backend = "nemoparse"  # Default to nemoparse for unknown types
+
+            # Initialize the appropriate processor
+            document_processor = None
+            if backend == "nemoparse":
+                if len(endpoint) == 0:
+                    config_values = dotenv_values(args.config_file)
+                    if not config_values:
+                        raise ValueError(f"Config file {args.config_file} not found or empty")
+                    endpoint = config_values.get("NEMOPARSE_ENDPOINT")
+                    model_name = config_values.get("NEMOPARSE_MODEL")
+                    if endpoint:
+                        logger.info(f"Using endpoint: {endpoint}")
+                    if model_name:
+                        logger.info(f"Using model: {model_name}")
+
+                if endpoint != "":
+                    document_processor = NemoparseProcessor(
+                        endpoint_url=endpoint, 
+                        model_name=model_name, 
+                        sort_by_position=args.sort_by_position
+                    )
+                else:
+                    raise ValueError("Missing nemotron-parse endpoint URL!")
+            elif backend == "marker":
+                try:
+                    document_processor = MarkerProcessor()
+                except NameError as e:
+                    logger.error("MarkerProcessor not available. Marker PDF processing requires additional dependencies.")
+                    logger.warning("To enable marker functionality, install with: pip install .[marker]")
+                    raise ImportError("MarkerProcessor not available. Install marker dependencies with: pip install .[marker]") from e
+            elif backend == "pptx":
+                try:
+                    document_processor = PptxProcessor(
+                        ocr_backend=args.pptx_ocr_backend,
+                        nemotron_endpoint=args.pptx_nemotron_endpoint or args.endpoint,
+                        nemotron_model=args.pptx_nemotron_model or args.model_name
+                    )
+                except NameError as e:
+                    logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
+                    logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
+                    raise ImportError("PptxProcessor not available. Install pptx dependencies.") from e
+                except ImportError as e:
+                    logger.error("PPTX processing dependencies are missing or incomplete.")
+                    logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
+                    if args.pptx_ocr_backend == "nemotron":
+                        logger.warning("For Nemotron OCR support, install with: pip install .[nemotronparse]")
+                    elif args.pptx_ocr_backend == "surya":
+                        logger.warning("For Surya OCR support, install with: pip install .[marker]")
+                    raise ImportError("PPTX processing dependencies are missing. Please install required packages.") from e
+            else:
+                raise ValueError(f"Unknown backend: {backend}")
+
             try:
                 outputs = document_processor.process_document(
                     filename, 

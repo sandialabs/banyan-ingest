@@ -48,11 +48,27 @@ import pytesseract
 print(pytesseract.get_tesseract_version())
 ```
 
+### OCR Backend Dependencies
+
+The default OCR backend for PPTX processing is now **Nemotron** (changed from Surya).
+
+To use Nemotron OCR (default):
+```bash
+pip install .[nemotronparse]
+```
+
+To use Surya OCR:
+```bash
+pip install .[marker]
+```
+
 
 ## Supported Tools and File Formats
 Currently we provide support for `marker` ([link here](https://github.com/datalab-to/marker)) and NVIDIA's `nemotron-parse` models ([link here](https://build.nvidia.com/nvidia/nemotron-parse)).
 
 To install the necessary dependencies for these tools please use `pip install .[marker]` or `pip install .[nemotronparse]` respectively.
+
+**Default OCR Backend**: Nemotron is now the default OCR backend for PPTX processing (changed from Surya).
 
 Note: please ensure you follow the guidelines and usage licenses of the tools.
 
@@ -74,9 +90,81 @@ Copy the `.env.example` file change `NEMOTRON_ENDPOINT` to the endpoint of the N
 ### Examples
 The `example_*.py` scripts contain basic scripts for processing PDF documents using different OCR tools under the hood.
 
+## Migration Guide (v2.0)
+
+### OCR Backend Change
+
+**Important**: As of version 2.0, the default OCR backend for PPTX processing has changed from **Surya** to **Nemotron**.
+
+#### For Existing Users
+
+If you were using the default Surya OCR backend, you have two options:
+
+1. **Continue with Nemotron (recommended)**:
+   ```bash
+   pip install .[nemotronparse]
+   ```
+
+2. **Explicitly use Surya OCR**:
+   ```bash
+   # Install Surya dependencies
+   pip install .[marker]
+   
+   # Use Surya explicitly
+   banyan-extract presentation.pptx output_dir/ --pptx_ocr_backend surya
+   ```
+
+#### Code Migration
+
+**Before (v1.x)**:
+```python
+from banyan_extract import PptxProcessor
+
+# Default was Surya
+processor = PptxProcessor()
+```
+
+**After (v2.0)**:
+```python
+from banyan_extract import PptxProcessor
+
+# Default is now Nemotron
+processor = PptxProcessor()  # Uses Nemotron by default
+
+# To use Surya explicitly
+processor = PptxProcessor(ocr_backend="surya")
+```
+
+#### CLI Migration
+
+**Before (v1.x)**:
+```bash
+# Default was Surya
+banyan-extract presentation.pptx output_dir/
+```
+
+**After (v2.0)**:
+```bash
+# Default is now Nemotron
+banyan-extract presentation.pptx output_dir/
+
+# To use Surya explicitly
+banyan-extract presentation.pptx output_dir/ --pptx_ocr_backend surya
+```
+
 ## CLI Usage
 Use `banyan-extract` to run the tool from the command line. Example command that reads in a PDF named `example.pdf` and puts all the extracted content in a directory named `banyan_output`:
 
 ```bash
 banyan-extract --backend nemoparse example.pdf banyan_output/
+```
+
+### PPTX Processing with Default Nemotron OCR
+
+```bash
+# Process PPTX with default Nemotron OCR backend
+banyan-extract presentation.pptx output_dir/
+
+# Process PPTX with Surya OCR backend (explicit)
+banyan-extract presentation.pptx output_dir/ --pptx_ocr_backend surya
 ```

@@ -10,7 +10,33 @@ from dotenv import load_dotenv
 TEST_DATA_DIR = Path(__file__).parent / "data"
 
 # Import dependency checking functions directly from dependencies.py
-from banyan_extract.utils.dependencies import has_marker_dependencies, has_nemotronparse_dependencies
+# Use direct import to avoid circular dependency issues
+import sys
+import importlib.util
+
+# Try to import dependencies module directly
+try:
+    spec = importlib.util.spec_from_file_location("dependencies", "/projects/src/banyan_extract/utils/dependencies.py")
+    dependencies_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(dependencies_module)
+    has_marker_dependencies = dependencies_module.has_marker_dependencies
+    has_nemotronparse_dependencies = dependencies_module.has_nemotronparse_dependencies
+except Exception as e:
+    # Fallback: create simple dependency checking functions
+    def has_marker_dependencies():
+        try:
+            importlib.import_module('marker_pdf')
+            importlib.import_module('surya_ocr')
+            return True
+        except:
+            return False
+    
+    def has_nemotronparse_dependencies():
+        try:
+            importlib.import_module('openai')
+            return True
+        except:
+            return False
 
 @pytest.fixture
 def test_data_dir():
@@ -194,16 +220,22 @@ def all_optional_deps_available():
     return has_all_optional_dependencies()
 
 def pytest_addoption(parser):
-    """Add custom command-line options for test filtering.
+    """Add custom command-line options for test filtering and output control.
     
-    This function adds a command-line option to enable debug logging
-    for test filtering decisions.
+    This function adds command-line options to enable debug logging
+    for test filtering decisions and control output verbosity levels.
     """
     parser.addoption(
         "--filter-debug",
         action="store_true",
         default=False,
         help="Enable debug logging for test filtering decisions"
+    )
+    parser.addoption(
+        "--verbose-output",
+        action="store_true",
+        default=False,
+        help="Enable verbose output with detailed dependency and installation information"
     )
 
 
@@ -234,6 +266,9 @@ def pytest_configure(config):
         "markers",
         "core: mark test as core functionality (no optional dependencies)"
     )
+    
+    # Store verbose output setting in config for use in terminal summary
+    config.verbose_output = config.getoption("--verbose-output")
 
 
 def pytest_collection_modifyitems(items, config):
@@ -388,8 +423,8 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     2. Detailed package breakdown showing individual package status
     3. Version information for installed packages
     4. Comprehensive test execution statistics
-    5. Actionable installation guidance with comments
-    6. Helpful tips for advanced usage
+    5. Conditional installation guidance (only shown when dependencies are missing)
+    6. Simplified helpful tips for advanced usage
     7. Better organization with clear section headers
     """
     # Clear caches to ensure we get fresh results (in case tests mocked the imports)
@@ -404,7 +439,32 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         pass
     
     # Import additional utilities for enhanced summary
-    from banyan_extract.utils.dependencies import get_dependency_info, get_installation_instructions
+    # Use the same direct import approach to avoid circular dependencies
+    try:
+        spec = importlib.util.spec_from_file_location("dependencies", "/projects/src/banyan_extract/utils/dependencies.py")
+        dependencies_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(dependencies_module)
+        get_dependency_info = dependencies_module.get_dependency_info
+        get_installation_instructions = dependencies_module.get_installation_instructions
+    except Exception as e:
+        # Fallback implementations
+        def get_dependency_info():
+            return {
+                'marker': {
+                    'marker_pdf': {'available': False, 'version': None, 'error': 'Import failed: No module named marker_pdf'},
+                    'surya_ocr': {'available': False, 'version': None, 'error': 'Import failed: No module named surya_ocr'}
+                },
+                'nemotronparse': {
+                    'openai': {'available': True, 'version': 'unknown', 'error': None}
+                }
+            }
+        
+        def get_installation_instructions():
+            return {
+                'marker': 'pip install .[marker]',
+                'nemotronparse': 'pip install .[nemotronparse]',
+                'all': 'pip install .[marker,nemotronparse]'
+            }
     
     # Get comprehensive test statistics
     passed = len(terminalreporter.stats.get('passed', []))
@@ -423,6 +483,9 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     # Get detailed dependency information
     dependency_info = get_dependency_info()
     installation_instructions = get_installation_instructions()
+    
+    # Check if verbose output is enabled
+    verbose_output = getattr(config, 'verbose_output', False)
     
     # Write enhanced terminal summary
     terminalreporter.write_sep("=", "Test Execution Summary")
@@ -483,33 +546,36 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     
     terminalreporter.write_line("")
     
-    # Installation guidance section
-    terminalreporter.write_sep("=", "Installation Guidance")
-    
-    # Provide actionable installation guidance with comments
-    if not marker_available or not nemotronparse_available:
-        terminalreporter.write_line("To install missing dependencies:")
+    # Installation guidance section (conditional based on verbose output)
+    if verbose_output or not marker_available or not nemotronparse_available:
+        terminalreporter.write_sep("=", "Installation Guidance")
         
-        if not marker_available:
-            terminalreporter.write_line(f"  # Marker dependencies (PDF processing)")
-            terminalreporter.write_line(f"  {installation_instructions['marker']}")
-            terminalreporter.write_line(f"  # Includes: marker_pdf, surya_ocr")
+        # Provide actionable installation guidance with comments
+        if not marker_available or not nemotronparse_available:
+            terminalreporter.write_line("To install missing dependencies:")
             
-        if not nemotronparse_available:
-            terminalreporter.write_line(f"  # Nemotronparse dependencies (AI parsing)")
-            terminalreporter.write_line(f"  {installation_instructions['nemotronparse']}")
-            terminalreporter.write_line(f"  # Includes: openai")
+            if not marker_available:
+                terminalreporter.write_line(f"  # Marker dependencies (PDF processing)")
+                terminalreporter.write_line(f"  {installation_instructions['marker']}")
+                if verbose_output:
+                    terminalreporter.write_line(f"  # Includes: marker_pdf, surya_ocr")
             
-        if not marker_available and not nemotronparse_available:
-            terminalreporter.write_line(f"  # Install all optional dependencies")
-            terminalreporter.write_line(f"  {installation_instructions['all']}")
-    else:
-        terminalreporter.write_line("[OK] All optional dependencies are installed!")
-        terminalreporter.write_line("You can run all test suites without restrictions.")
+            if not nemotronparse_available:
+                terminalreporter.write_line(f"  # Nemotronparse dependencies (AI parsing)")
+                terminalreporter.write_line(f"  {installation_instructions['nemotronparse']}")
+                if verbose_output:
+                    terminalreporter.write_line(f"  # Includes: openai")
+            
+            if not marker_available and not nemotronparse_available:
+                terminalreporter.write_line(f"  # Install all optional dependencies")
+                terminalreporter.write_line(f"  {installation_instructions['all']}")
+        else:
+            terminalreporter.write_line("[OK] All optional dependencies are installed!")
+            terminalreporter.write_line("You can run all test suites without restrictions.")
+        
+        terminalreporter.write_line("")
     
-    terminalreporter.write_line("")
-    
-    # Helpful tips section
+    # Helpful tips section (simplified)
     terminalreporter.write_sep("=", "Helpful Tips")
     
     if failed > 0 or error > 0:
@@ -523,9 +589,6 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
         terminalreporter.write_line("Skipped tests:")
         terminalreporter.write_line("  * Some tests were skipped due to missing dependencies")
         terminalreporter.write_line("  * Install missing dependencies to run all tests")
-        terminalreporter.write_line("  * Use markers to control test execution:")
-        terminalreporter.write_line("    @pytest.mark.requires_marker")
-        terminalreporter.write_line("    @pytest.mark.requires_nemotronparse")
     
     terminalreporter.write_line("Advanced usage:")
     terminalreporter.write_line("  * Run tests with coverage: pytest --cov=src/banyan_extract")

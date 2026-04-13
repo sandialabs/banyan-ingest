@@ -205,8 +205,6 @@ def detect_rotation_angle(
         # Parse OSD output
         rotation_angle, confidence = _parse_osd_output(osd_output)
         
-        logger.debug(f"Detected rotation angle: {rotation_angle} degrees with confidence: {confidence:.2f}")
-        
         # Check if confidence meets threshold
         if confidence >= confidence_threshold:
             # Normalize angle to standard range

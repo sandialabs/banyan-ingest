@@ -10,4 +10,3 @@ except:
 
 from .nemoparse_processor import NemoparseProcessor 
 from .pptx_processor import PptxProcessor 
-from ..utils.evaluate_extraction import evaluate_extraction

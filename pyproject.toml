@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "banyan-extract"
-version = "0.8.0"
+version = "0.9.0"
 license = { text = "BSD 3" }
 authors = [
     { name="Sandia National Laboratories" },

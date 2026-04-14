@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "banyan-extract"
-version = "0.9.0"
+version = "0.9.1"
 license = { text = "BSD 3" }
 authors = [
     { name="Sandia National Laboratories" },
@@ -16,14 +16,14 @@ dependencies = [
     "pandas",
     "pdf2image",
     "python-dotenv",
-     "opencv-python", 
-     "numpy"
+    "opencv-python", 
+    "numpy"
     ]
 
 [project.optional-dependencies]
 marker = ["marker-pdf", "surya-ocr"]
-    
 nemotronparse = ["openai"]
+autorotate = ["pytesseract"]
 
 [project.scripts]
 banyan-extract = "banyan_extract.cli:main"

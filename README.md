@@ -27,7 +27,8 @@ pip install .
 
 You will need poppler installed. 
 
-For **rotation detection** functionality, you need Tesseract OCR (version 4.0 or higher recommended):
+#### Rottaion Detection
+For the **rotation detection** functionality, you need Tesseract OCR (version 4.0 or higher recommended) installed on your system
 
 ```bash
 pip install pytesseract
@@ -52,7 +53,7 @@ print(pytesseract.get_tesseract_version())
 
 The default OCR backend for PPTX processing is now **Nemotron** (changed from Surya).
 
-To use Nemotron OCR (default):
+To use Nemotron OCR (default and already included):
 ```bash
 pip install .[nemotronparse]
 ```
@@ -61,7 +62,6 @@ To use Surya OCR:
 ```bash
 pip install .[marker]
 ```
-
 
 ## Supported Tools and File Formats
 Currently we provide support for `marker` ([link here](https://github.com/datalab-to/marker)) and NVIDIA's `nemotron-parse` models ([link here](https://build.nvidia.com/nvidia/nemotron-parse)).

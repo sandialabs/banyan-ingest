@@ -274,9 +274,8 @@ def main():
                     auto_detect_rotation=args.auto_detect_rotation,
                     rotation_confidence_threshold=args.rotation_confidence_threshold
                 )
-                if not args.checkpointing:
-                    for file_output, basename in zip(outputs, basenames):
-                        file_output.save_output(output_directory, basename)
+                for file_output, basename in zip(outputs, basenames):
+                    file_output.save_output(output_directory, basename)
             except Exception as e:
                 logger.error(f"Failed to process batch: {e}")
                 raise

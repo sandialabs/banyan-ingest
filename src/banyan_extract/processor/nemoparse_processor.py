@@ -343,32 +343,7 @@ class NemoparseProcessor(Processor):
         logger.info(f"Batch processing completed. Processed {len(file_outputs) if not use_checkpointing else len(filepaths)} files.")
         return file_outputs
 
-    def process_page(self, page,
-                     re_run=False,
-                     temperature=0.0,
-                     rotation_angle: float = 0, 
-                     auto_detect_rotation: bool = False, 
-                     rotation_confidence_threshold: float = 0.7):
-        """
-        Process a single page with optional rotation.
-        
-        Args:
-            page: Page image data in bytes
-            rotation_angle: Rotation angle in degrees (default: 0)
-            auto_detect_rotation: Whether to automatically detect rotation (default: False)
-            rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
-            
-        Returns:
-            NemoparseData object containing processed page data
-        """
-        return self._process_image(
-            page, 
-            re_run=re_run,
-            temperature=temperature,
-            rotation_angle=rotation_angle,
-            auto_detect_rotation=auto_detect_rotation,
-            rotation_confidence_threshold=rotation_confidence_threshold
-        )
+
 
     def process_document(self, filepath,
                          draw_bboxes=True, 
@@ -429,6 +404,8 @@ class NemoparseProcessor(Processor):
                 output.add_output(self._process_image(
                     page_image, 
                     draw_bboxes=draw_bboxes, 
+                    re_run=re_run,
+                    temperature=temperature,
                     rotation_angle=normalized_angle,
                     auto_detect_rotation=auto_detect_rotation,
                     rotation_confidence_threshold=rotation_confidence_threshold

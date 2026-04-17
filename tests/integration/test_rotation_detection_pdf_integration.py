@@ -21,10 +21,10 @@ from banyan_extract.utils.image_rotation import rotate_image
 class TestRotationDetectionWithActualPDF:
     """Integration tests using actual PDF files and Tesseract OCR."""
     
-    def test_sample_rotation_pdf_file_properties(self):
+    def test_sample_rotation_pdf_file_properties(self, test_data_dir):
         """Test basic properties of sample_rotation.pdf file."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         
         # Verify file exists and has reasonable size
         assert sample_pdf_path.exists()
@@ -33,10 +33,10 @@ class TestRotationDetectionWithActualPDF:
         assert file_size > 0
         assert file_size < 100000  # Reasonable size for a test PDF
     
-    def test_pdf_to_image_conversion_with_sample_rotation(self):
+    def test_pdf_to_image_conversion_with_sample_rotation(self, test_data_dir):
         """Test PDF to image conversion with sample_rotation.pdf."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         
         try:
             from pdf2image import convert_from_path
@@ -56,10 +56,10 @@ class TestRotationDetectionWithActualPDF:
             # If PDF conversion fails, skip this test
             pytest.skip(f"PDF conversion failed: {e}")
     
-    def test_rotation_detection_with_actual_pdf_images(self):
+    def test_rotation_detection_with_actual_pdf_images(self, test_data_dir):
         """Test rotation detection with actual images from sample_rotation.pdf."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         
         try:
             from pdf2image import convert_from_path
@@ -99,10 +99,10 @@ class TestRotationDetectionWithActualPDF:
         except Exception as e:
             pytest.skip(f"PDF processing failed: {e}")
     
-    def test_rotation_detection_fallback_with_actual_pdf(self):
+    def test_rotation_detection_fallback_with_actual_pdf(self, test_data_dir):
         """Test fallback behavior when processing actual PDF without Tesseract."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         
         try:
             from pdf2image import convert_from_path
@@ -334,4 +334,4 @@ class TestRotationDetectionVisualVerification:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__])

@@ -222,7 +222,7 @@ class TestNemoparseOutputExampleBased:
         assert "The company achieved record revenue" in content
         assert "Revenue growth: 25%" in content
 
-    def test_batch_processing_example(self, temp_output_dir):
+    def test_batch_processing_example(self, temp_output_dir, test_data_dir):
         """
         Example: Batch processing multiple documents
         
@@ -280,7 +280,7 @@ class TestNemoparseOutputExampleBased:
         processor.nemotron_ocr.get_detailed_ocr_results = Mock(side_effect=mock_ocr_response)
         
         # Process batch documents
-        filepaths = [f'{name}.pdf' for name in document_names]
+        filepaths = [str(test_data_dir / "docs" / f"{name}.pdf") for name in document_names]
         results = processor.process_batch_documents(filepaths, use_checkpointing=False)
         
         # Verify we got results for all documents

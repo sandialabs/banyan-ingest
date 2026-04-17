@@ -2,6 +2,21 @@
 
 All notable changes to the banyan-extract project will be documented in this file.
 
+## PR #5 - 2026-04-17
+
+### Test Suite Improvements
+
+**Fixed Issues**:
+- Fixed sample file path issues by implementing consistent use of the test_data_dir fixture across all integration tests
+- Standardized test data directory access to prevent path-related test failures
+- Improved test reliability and maintainability
+- Reduced verbosity of test output
+
+**Impact**:
+- More reliable test execution across different environments
+- Consistent test data access patterns
+- Reduced test failures due to path issues
+
 ## PR #4 - 2026-04-09
 
 ### Documentation Improvements

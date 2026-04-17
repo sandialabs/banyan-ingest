@@ -79,4 +79,4 @@ if __name__ == "__main__":
     # Set up test data when this module is run directly
     test_data_dir = Path(__file__).parent / "data"
     setup_test_data_directory(test_data_dir)
-    print(f"Test data directory set up at: {test_data_dir}")
+    # Removed print statement to reduce verbosity

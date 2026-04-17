@@ -21,18 +21,18 @@ from banyan_extract.utils.image_rotation import rotate_image
 class TestRotationDetectionWithSamplePDF:
     """Integration tests using sample_rotation.pdf file."""
     
-    def test_sample_rotation_pdf_exists(self):
+    def test_sample_rotation_pdf_exists(self, test_data_dir):
         """Test that sample_rotation.pdf file exists."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         assert sample_pdf_path.exists()
         assert sample_pdf_path.is_file()
         assert sample_pdf_path.stat().st_size > 0
     
-    def test_rotation_detection_with_sample_pdf(self):
+    def test_rotation_detection_with_sample_pdf(self, test_data_dir):
         """Test rotation detection using sample_rotation.pdf."""
-        # Use relative path from current file location
-        sample_pdf_path = Path(__file__).parent.parent / "data" / "docs" / "sample_rotation.pdf"
+        # Use test_data_dir fixture
+        sample_pdf_path = test_data_dir / "docs" / "sample_rotation.pdf"
         
         try:
             # Try to convert PDF to images
@@ -499,4 +499,4 @@ class TestRotationDetectionErrorHandling:
 
 
 if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    pytest.main([__file__])

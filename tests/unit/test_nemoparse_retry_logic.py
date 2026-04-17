@@ -23,7 +23,7 @@ class TestNemoparseProcessorRerunAndTemperature:
         
         mock_run_single.return_value = MagicMock()
         
-        processor.process_page(dummy_image, temperature=0.7)
+        processor._process_image(dummy_image, temperature=0.7)
         
         # Verify the temperature parameter is propagated to the single run function
         mock_run_single.assert_called_once_with(
@@ -38,7 +38,7 @@ class TestNemoparseProcessorRerunAndTemperature:
         """Test that re-run logic is entirely skipped when the flag is False."""
         processor = NemoparseProcessor()
         
-        processor.process_page(b"image_data", re_run=False)
+        processor._process_image(b"image_data", re_run=False)
         
         # The single run should happen once, and evaluation should never occur
         mock_run_single.assert_called_once()
@@ -52,7 +52,7 @@ class TestNemoparseProcessorRerunAndTemperature:
         mock_evaluate.return_value = (False, 5.0) 
         
         processor = NemoparseProcessor()
-        processor.process_page(b"image_data", re_run=True)
+        processor._process_image(b"image_data", re_run=True)
         
         # Should only call the OCR pass once because the first attempt was good
         mock_run_single.assert_called_once()
@@ -70,7 +70,7 @@ class TestNemoparseProcessorRerunAndTemperature:
         mock_run_single.side_effect = [out_initial, out_retry1]
         
         processor = NemoparseProcessor()
-        result = processor.process_page(b"image_data", re_run=True)
+        result = processor._process_image(b"image_data", re_run=True)
         
         # Verify it broke the loop early after the first retry succeeded
         assert mock_run_single.call_count == 2
@@ -99,7 +99,7 @@ class TestNemoparseProcessorRerunAndTemperature:
         mock_run_single.side_effect = [out_initial, out_retry1, out_retry2, out_retry3]
         
         processor = NemoparseProcessor()
-        result = processor.process_page(b"image_data", re_run=True)
+        result = processor._process_image(b"image_data", re_run=True)
         
         # Verify it completed all possible runs (1 initial + 3 retries)
         assert mock_run_single.call_count == 4

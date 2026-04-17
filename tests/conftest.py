@@ -4,10 +4,57 @@
 import pytest
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+# Try to import dotenv for .env file loading
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    load_dotenv = None
 
 # Base directory for test data
 TEST_DATA_DIR = Path(__file__).parent / "data"
+
+
+def load_environment_variables():
+    """
+    Load environment variables from .env file if available.
+    
+    This function attempts to load environment variables from a .env file
+    using python-dotenv if available, or provides guidance if not available.
+    
+    Returns:
+        dict: Dictionary of loaded environment variables
+    """
+    env_vars = {}
+    
+    # Try to load from .env file
+    env_file = Path(__file__).parent.parent / ".env"
+    
+    if env_file.exists():
+        if DOTENV_AVAILABLE and load_dotenv:
+            # Use python-dotenv if available
+            load_dotenv(env_file, override=True)
+            env_vars = {
+                'NEMOPARSE_ENDPOINT': os.environ.get('NEMOPARSE_ENDPOINT'),
+                'NEMOPARSE_MODEL': os.environ.get('NEMOPARSE_MODEL')
+            }
+        else:
+            # Fallback: manually read .env file
+            try:
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            key, value = line.split('=', 1)
+                            os.environ[key.strip()] = value.strip().strip('"').strip("'")
+                            env_vars[key.strip()] = value.strip().strip('"').strip("'")
+            except Exception as e:
+                # Removed print statement to reduce verbosity
+                pass
+    
+    return env_vars
 
 # Import dependency checking functions directly from dependencies.py
 # Use direct import to avoid circular dependency issues
@@ -200,6 +247,301 @@ def papermage_processor():
     from banyan_extract.processor.papermage_processor import PaperMageProcessor
     return PaperMageProcessor()
 
+
+def validate_api_configuration_for_real_mode(config):
+    """
+    Validate API configuration when using real API mode.
+    
+    Args:
+        config: pytest config object
+        
+    Raises:
+        ValueError: If real API mode is enabled but configuration is missing
+    """
+    test_mode = config.getoption("--api-test-mode")
+    
+    if test_mode in ['real', 'auto']:
+        endpoint = os.environ.get('NEMOPARSE_ENDPOINT')
+        model = os.environ.get('NEMOPARSE_MODEL')
+        
+        if test_mode == 'real' and (not endpoint or not model):
+            raise ValueError(
+                "Real API mode requires NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL "
+                "environment variables"
+            )
+        
+        # Additional validation for endpoint URL format
+        if endpoint and not endpoint.startswith(('http://', 'https://')):
+            raise ValueError(f"Invalid endpoint URL format: {endpoint}")
+
+def get_api_endpoint_url():
+    """
+    Get the API endpoint URL from environment variables with validation.
+    
+    This function loads environment variables from .env file if available
+    before checking the environment variable.
+    
+    Returns:
+        str: Validated API endpoint URL
+        
+    Raises:
+        ValueError: If endpoint URL is invalid or missing
+    """
+    # Load environment variables from .env file
+    load_environment_variables()
+    
+    endpoint = os.environ.get('NEMOPARSE_ENDPOINT')
+    
+    if not endpoint:
+        raise ValueError("NEMOPARSE_ENDPOINT environment variable not set")
+    
+    if not endpoint.startswith(('http://', 'https://')):
+        raise ValueError(f"Invalid endpoint URL format: {endpoint}")
+    
+    return endpoint
+
+def get_api_model_name():
+    """
+    Get the API model name from environment variables with validation.
+    
+    This function loads environment variables from .env file if available
+    before checking the environment variable.
+    
+    Returns:
+        str: Validated API model name
+        
+    Raises:
+        ValueError: If model name is missing
+    """
+    # Load environment variables from .env file
+    load_environment_variables()
+    
+    model = os.environ.get('NEMOPARSE_MODEL')
+    
+    if not model:
+        raise ValueError("NEMOPARSE_MODEL environment variable not set")
+    
+    return model
+
+
+@pytest.fixture
+def nemoparse_processor_real(request, api_test_mode):
+    """
+    Create a NemoparseProcessor instance configured for real API calls.
+    
+    Only available when api_test_mode is 'real' or 'auto' with proper configuration.
+    
+    Args:
+        request: pytest request object
+        api_test_mode: current API test mode
+        
+    Returns:
+        NemoparseProcessor: Configured processor instance
+        
+    Raises:
+        pytest.skip.Exception: If real API calls are disabled or configuration is missing
+    """
+    if api_test_mode == 'mock':
+        pytest.skip("Real API calls disabled (--api-test-mode=mock)")
+    
+    # Import and configuration logic with enhanced error handling
+    try:
+        from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
+        
+        # Get configuration from environment (still needed for API credentials)
+        try:
+            endpoint_url = get_api_endpoint_url()
+            model_name = get_api_model_name()
+        except ValueError as e:
+            if api_test_mode == 'real':
+                pytest.skip(f"Real API calls require valid configuration: {str(e)}")
+            else:  # auto mode
+                pytest.skip(f"Auto mode: API configuration incomplete ({str(e)}), using mocks")
+        
+        # Create and return configured processor
+        return NemoparseProcessor(endpoint_url=endpoint_url, model_name=model_name)
+        
+    except ImportError:
+        pytest.skip("Nemoparse dependencies not available")
+    except Exception as e:
+        pytest.skip(f"Failed to create real API processor: {str(e)}")
+
+
+@pytest.fixture
+def nemoparse_processor_auto(request, api_test_mode):
+    """
+    Create a NemoparseProcessor instance that automatically uses real API calls
+    when configured, otherwise falls back to mocks.
+    
+    This fixture provides a convenient way to test with real API calls when available
+    but gracefully falls back to mocks when not configured.
+    
+    Args:
+        request: pytest request object
+        api_test_mode: current API test mode
+        
+    Returns:
+        NemoparseProcessor: Configured processor instance
+        
+    Raises:
+        pytest.skip.Exception: If dependencies are not available
+    """
+    # Only available in auto mode
+    if api_test_mode != 'auto':
+        pytest.skip(f"Auto processor only available when --api-test-mode=auto")
+    
+    # Try to create real processor first
+    try:
+        return nemoparse_processor_real(request, api_test_mode)
+    except pytest.skip.Exception:
+        # Fall back to regular processor with mocks
+        try:
+            from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
+            return NemoparseProcessor()
+        except ImportError:
+            pytest.skip("Nemoparse dependencies not available")
+
+
+@pytest.fixture
+def configured_nemoparse_processor_real(request, api_test_mode):
+    """
+    Create a pre-configured NemoparseProcessor instance for real API calls
+    with additional configuration options.
+    
+    This fixture extends the basic real processor with additional setup
+    and configuration for more complex testing scenarios.
+    
+    Args:
+        request: pytest request object
+        api_test_mode: current API test mode
+        
+    Returns:
+        NemoparseProcessor: Configured and enhanced processor instance
+        
+    Raises:
+        pytest.skip.Exception: If real API calls are disabled or configuration is missing
+    """
+    processor = nemoparse_processor_real(request, api_test_mode)
+    
+    # Additional configuration for real API testing
+    # This can be extended with specific configurations as needed
+    
+    return processor
+
+
+@pytest.fixture
+def real_api_test_data():
+    """
+    Provide real test data for API testing.
+    
+    This fixture creates realistic test data that can be used with real API calls.
+    It includes sample documents, images, and expected responses.
+    
+    Returns:
+        dict: Dictionary containing real test data for API testing
+    """
+    from PIL import Image
+    import io
+    
+    # Create real test images
+    test_images = {}
+    
+    # Standard test image
+    standard_image = Image.new('RGB', (400, 300), color='white')
+    img_byte_arr = io.BytesIO()
+    standard_image.save(img_byte_arr, format='PNG')
+    test_images['standard'] = img_byte_arr.getvalue()
+    
+    # Multi-page document images
+    multi_page_images = []
+    for i in range(3):
+        page_image = Image.new('RGB', (400, 300), color=f'lightgray')
+        img_byte_arr = io.BytesIO()
+        page_image.save(img_byte_arr, format='PNG')
+        multi_page_images.append(img_byte_arr.getvalue())
+    test_images['multi_page'] = multi_page_images
+    
+    # Test image with special content
+    special_image = Image.new('RGB', (400, 300), color='white')
+    # Add some visual elements to make it more realistic
+    # (In a real implementation, you might add text, shapes, etc.)
+    img_byte_arr = io.BytesIO()
+    special_image.save(img_byte_arr, format='PNG')
+    test_images['special'] = img_byte_arr.getvalue()
+    
+    return {
+        'images': test_images,
+        'expected_responses': {
+            'standard': {
+                'text': 'Sample document content',
+                'elements': ['header', 'paragraph', 'footer']
+            },
+            'multi_page': {
+                'pages': 3,
+                'text_per_page': 'Page {i} content'
+            }
+        }
+    }
+
+
+@pytest.fixture
+def api_test_configuration():
+    """
+    Provide comprehensive API test configuration.
+    
+    This fixture combines API mode configuration with real API setup
+    to provide a complete testing environment.
+    
+    Args:
+        request: pytest request object
+        api_test_mode: current API test mode
+        
+    Returns:
+        dict: API test configuration including mode, processor, and status
+    """
+    def get_configuration(request, api_test_mode):
+        config = request.config
+        test_mode = config.getoption("--api-test-mode")
+        
+        # Determine if real API testing is possible
+        endpoint_available = bool(os.environ.get('NEMOPARSE_ENDPOINT'))
+        model_available = bool(os.environ.get('NEMOPARSE_MODEL'))
+        
+        real_api_possible = endpoint_available and model_available
+        
+        # Try to get real processor if possible
+        processor = None
+        using_real_api = False
+        
+        if real_api_possible and test_mode in ['real', 'auto']:
+            try:
+                processor = nemoparse_processor_real(request, api_test_mode)
+                using_real_api = True
+            except pytest.skip.Exception:
+                # Could not create real processor, will use mocks
+                pass
+        
+        # Fall back to regular processor
+        if processor is None:
+            try:
+                from banyan_extract.processor.nemoparse_processor import NemoparseProcessor
+                processor = NemoparseProcessor()
+                using_real_api = False
+            except ImportError:
+                pytest.skip("Nemoparse dependencies not available")
+        
+        return {
+            'mode': test_mode,
+            'processor': processor,
+            'using_real_api': using_real_api,
+            'real_api_possible': real_api_possible,
+            'endpoint_available': endpoint_available,
+            'model_available': model_available
+        }
+    
+    return get_configuration(request, api_test_mode)
+
+
 def has_all_optional_dependencies():
     """Check if all optional dependencies are available."""
     return has_marker_dependencies() and has_nemotronparse_dependencies()
@@ -219,6 +561,151 @@ def all_optional_deps_available():
     """Fixture that indicates if all optional dependencies are available."""
     return has_all_optional_dependencies()
 
+
+@pytest.fixture(scope="session")
+def api_test_mode(request):
+    """
+    Return the current API test mode from pytest configuration.
+    
+    Values:
+    - 'mock': Use mocked API calls (default)
+    - 'real': Use real API calls when available
+    - 'auto': Use real API calls if configured, otherwise mock
+    
+    Returns:
+        str: API test mode
+    """
+    return get_api_test_mode(request)
+
+
+def get_api_test_mode_from_item(item):
+    """
+    Get the API test mode from a test item's configuration.
+    
+    Args:
+        item: pytest test item
+        
+    Returns:
+        str: API test mode
+    """
+    config = item.config
+    return config.getoption("--api-test-mode")
+
+
+def should_skip_test_based_on_markers(item):
+    """
+    Determine if a test should be skipped based on API test mode and markers.
+    
+    Args:
+        item: pytest test item
+        
+    Returns:
+        tuple: (should_skip, skip_reason) or (False, None)
+    """
+    config = item.config
+    test_mode = config.getoption("--api-test-mode")
+    
+    has_real_marker = any(marker.name == "real_api" for marker in item.iter_markers())
+    has_mock_marker = any(marker.name == "mock_api" for marker in item.iter_markers())
+    has_any_marker = any(marker.name == "any_api" for marker in item.iter_markers())
+    
+    # Determine skip logic
+    if has_real_marker and test_mode == "mock":
+        return True, f"Test requires real API but --api-test-mode={test_mode}"
+    
+    if has_mock_marker and test_mode in ["real", "auto"]:
+        return True, f"Test requires mock API but --api-test-mode={test_mode}"
+    
+    # Test can run (either has any_api marker, or no conflicting markers)
+    return False, None
+
+
+def get_api_configuration_status():
+    """
+    Get the current API configuration status.
+    
+    This function loads environment variables from .env file if available
+    and returns the current API configuration status.
+    
+    Returns:
+        dict: Configuration status including endpoint and model availability
+    """
+    # Load environment variables from .env file
+    load_environment_variables()
+    
+    # Get current environment variables
+    endpoint = os.environ.get('NEMOPARSE_ENDPOINT')
+    model = os.environ.get('NEMOPARSE_MODEL')
+    
+    return {
+        'endpoint_available': bool(endpoint),
+        'model_available': bool(model),
+        'endpoint': endpoint,
+        'model': model
+    }
+
+
+def pytest_collection_finish(session):
+    """
+    Provide summary information about API test configuration after collection.
+    
+    This hook runs after test collection and provides useful information
+    about the API test mode and configuration. Output is conditional based on
+    verbosity settings.
+    
+    Args:
+        session: pytest session object
+    """
+    # Check if we should show detailed output
+    verbose_output = session.config.getoption("--verbose-output")
+    suppress_output = session.config.getoption("--suppress-output")
+    
+    # Only show detailed summary if verbose output is requested or suppress mode is disabled
+    if not (verbose_output or not suppress_output):
+        return
+    
+    # Get API test mode
+    test_mode = session.config.getoption("--api-test-mode")
+    
+    # Get API configuration status
+    config_status = get_api_configuration_status()
+    
+    # Count tests by marker
+    real_api_tests = []
+    mock_api_tests = []
+    any_api_tests = []
+    unmarked_tests = []
+    
+    for item in session.items:
+        has_real = any(marker.name == "real_api" for marker in item.iter_markers())
+        has_mock = any(marker.name == "mock_api" for marker in item.iter_markers())
+        has_any = any(marker.name == "any_api" for marker in item.iter_markers())
+        
+        if has_real:
+            real_api_tests.append(item)
+        elif has_mock:
+            mock_api_tests.append(item)
+        elif has_any:
+            any_api_tests.append(item)
+        else:
+            unmarked_tests.append(item)
+    
+    # Report configuration using print (simpler and more reliable)
+    print(
+        f"\n=== API Test Configuration Summary ==="
+        f"\nAPI Test Mode: {test_mode}"
+        f"\nReal API Endpoint: {config_status['endpoint_available']} (available: {config_status['endpoint_available']})"
+        f"\nReal API Model: {config_status['model_available']} (available: {config_status['model_available']})"
+        f"\n\nTest Distribution:"
+        f"  Real API Tests: {len(real_api_tests)}"
+        f"  Mock API Tests: {len(mock_api_tests)}"
+        f"  Any API Tests: {len(any_api_tests)}"
+        f"  Unmarked Tests: {len(unmarked_tests)}"
+        f"\nTotal Tests: {len(session.items)}"
+        f"\n=== End Configuration Summary ===\n"
+    )
+
+
 def pytest_addoption(parser):
     """Add custom command-line options for test filtering and output control.
     
@@ -237,6 +724,39 @@ def pytest_addoption(parser):
         default=False,
         help="Enable verbose output with detailed dependency and installation information"
     )
+    parser.addoption(
+        "--suppress-output",
+        action="store_true",
+        default=True,
+        help="Suppress non-essential output (default: True)"
+    )
+    parser.addoption(
+        "--no-suppress-output",
+        action="store_false",
+        dest="suppress_output",
+        help="Show all output (disables --suppress-output)"
+    )
+    parser.addoption(
+        "--api-test-mode",
+        action="store",
+        default="mock",
+        choices=["mock", "real", "auto"],
+        help="API test mode: 'mock' (default), 'real', or 'auto'"
+    )
+
+
+def get_api_test_mode(request):
+    """
+    Get the API test mode from pytest configuration.
+    
+    Args:
+        request: pytest request object
+        
+    Returns:
+        str: API test mode ('mock', 'real', or 'auto')
+    """
+    config = request.config
+    return config.getoption("--api-test-mode")
 
 
 def pytest_configure(config):
@@ -250,7 +770,10 @@ def pytest_configure(config):
     Note: Tests can use both custom markers and automatic filtering. Custom markers
     take precedence over automatic filtering.
     """
-    # Enable debug logging if requested
+    # Set up logging configuration based on command line options
+    setup_test_logging(config)
+    
+    # Enable debug logging if requested (this will be handled by setup_test_logging)
     if config.getoption("--filter-debug"):
         enable_debug_logging()
     
@@ -267,8 +790,23 @@ def pytest_configure(config):
         "core: mark test as core functionality (no optional dependencies)"
     )
     
+    # Add API test mode markers
+    config.addinivalue_line(
+        "markers",
+        "real_api: mark test as requiring real API calls"
+    )
+    config.addinivalue_line(
+        "markers",
+        "mock_api: mark test as requiring mocked API calls"
+    )
+    config.addinivalue_line(
+        "markers",
+        "any_api: mark test as working with either real or mocked API calls"
+    )
+    
     # Store verbose output setting in config for use in terminal summary
     config.verbose_output = config.getoption("--verbose-output")
+    config.suppress_output = config.getoption("--suppress-output")
 
 
 def pytest_collection_modifyitems(items, config):
@@ -293,6 +831,9 @@ def pytest_collection_modifyitems(items, config):
     # Get logger and configure based on command line option
     logger = logging.getLogger("pytest_filtering")
     
+    # Check suppress output setting
+    suppress_output = config.getoption("--suppress-output")
+    
     # Enable debug logging if --filter-debug flag is set
     if config.getoption("--filter-debug"):
         logger.setLevel(logging.DEBUG)
@@ -304,6 +845,9 @@ def pytest_collection_modifyitems(items, config):
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             ch.setFormatter(formatter)
             logger.addHandler(ch)
+    elif suppress_output:
+        # In suppress output mode, reduce logging to WARNING level to minimize output
+        logger.setLevel(logging.WARNING)
     else:
         logger.setLevel(logging.INFO)
     
@@ -375,11 +919,45 @@ def pytest_collection_modifyitems(items, config):
             logger.info(f"Skipping (auto marker): {relative_path}::{item.name}")
             item.add_marker(pytest.mark.skip(reason="marker dependencies not available (auto-detected)"))
             continue
-            
+        
         if any(nemotronparse_patterns) and not nemotronparse_available and not has_nemotronparse_marker:
-            logger.info(f"Skipping (auto nemotronparse): {relative_path}::{item.name}")
-            item.add_marker(pytest.mark.skip(reason="nemotronparse dependencies not available (auto-detected)"))
+             logger.info(f"Skipping (auto nemotronparse): {relative_path}::{item.name}")
+             item.add_marker(pytest.mark.skip(reason="nemotronparse dependencies not available (auto-detected)"))
+             continue
+        
+        # Apply API test mode filtering based on markers
+        test_mode = config.getoption("--api-test-mode")
+        has_real_marker = any(marker.name == "real_api" for marker in item.iter_markers())
+        has_mock_marker = any(marker.name == "mock_api" for marker in item.iter_markers())
+        has_any_marker = any(marker.name == "any_api" for marker in item.iter_markers())
+        
+        # Enhanced skip logic with better messaging
+        should_skip, skip_reason = should_skip_test_based_on_markers(item)
+        
+        if should_skip:
+            # Provide detailed skip information
+            marker_names = [marker.name for marker in item.iter_markers()]
+            test_name = f"{relative_path}::{item.name}"
+            
+            logger.info(f"Skipping API test: {test_name}")
+            logger.info(f"  Markers: {', '.join(marker_names) if marker_names else 'None'}")
+            logger.info(f"  Mode: {test_mode}")
+            logger.info(f"  Reason: {skip_reason}")
+            
+            item.add_marker(
+                pytest.mark.skip(reason=skip_reason)
+            )
             continue
+            
+        # Log tests that will be run with API mode information
+        if has_real_marker:
+            logger.info(f"Running real API test: {relative_path}::{item.name} (mode: {test_mode})")
+        elif has_mock_marker:
+            logger.info(f"Running mock API test: {relative_path}::{item.name} (mode: {test_mode})")
+        elif has_any_marker:
+            logger.info(f"Running any API test: {relative_path}::{item.name} (mode: {test_mode})")
+        else:
+            logger.debug(f"Running unmarked test: {relative_path}::{item.name} (mode: {test_mode})")
         
         # Log tests that will be run
         if logger.isEnabledFor(logging.DEBUG):
@@ -415,6 +993,35 @@ def enable_debug_logging():
     return logger
 
 
+def setup_test_logging(config):
+    """Set up logging configuration for tests based on command line options.
+    
+    Sets default logging level to WARNING to reduce verbosity.
+    Only enables DEBUG logging when --filter-debug flag is set.
+    
+    Args:
+        config: pytest configuration object
+    """
+    import logging
+    
+    # Set default logging level to WARNING for reduced verbosity
+    default_level = logging.WARNING
+    
+    # Enable DEBUG logging if --filter-debug flag is set
+    if config.getoption("--filter-debug"):
+        default_level = logging.DEBUG
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=default_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Also configure the pytest_filtering logger specifically
+    pytest_logger = logging.getLogger("pytest_filtering")
+    pytest_logger.setLevel(default_level)
+
+
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """Add enhanced user-friendly terminal summary with comprehensive dependency and test information.
     
@@ -426,6 +1033,8 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     5. Conditional installation guidance (only shown when dependencies are missing)
     6. Simplified helpful tips for advanced usage
     7. Better organization with clear section headers
+    
+    Output is conditional based on verbosity settings to reduce noise.
     """
     # Clear caches to ensure we get fresh results (in case tests mocked the imports)
     try:
@@ -486,6 +1095,16 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     
     # Check if verbose output is enabled
     verbose_output = getattr(config, 'verbose_output', False)
+    suppress_output = getattr(config, 'suppress_output', True)
+    
+    # Only show detailed summary if verbose output is requested or suppress mode is disabled
+    if not (verbose_output or not suppress_output):
+        # Show minimal summary in suppress output mode
+        terminalreporter.write_sep("=", "Test Execution Summary")
+        terminalreporter.write_line(f"Total: {total_tests}, Passed: {passed}, Failed: {failed}, Skipped: {skipped}")
+        if failed == 0 and error == 0:
+            terminalreporter.write_line("All tests passed!")
+        return
     
     # Write enhanced terminal summary
     terminalreporter.write_sep("=", "Test Execution Summary")

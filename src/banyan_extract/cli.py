@@ -104,6 +104,8 @@ Examples:
     # Updated Help Descriptions for re_run and temperature
     parser.add_argument("--re_run", action="store_true", default=False, help="Enables automatic retries. Uses contour area detection to evaluate missed regions, and re-runs the model at higher temperatures (max 3 retries) if the missed area is too high. Note: This flag is ONLY supported by the nemotron parse model.")
     parser.add_argument("--temperature", default=0.0, type=float, help="Temperature setting for the model. Note: This flag is ONLY supported by the nemotron parse model.")
+
+    # Rotation detection arguments
     parser.add_argument("--rotation_angle", default=0, type=float, 
                        help="Angle in degrees to rotate the input page(s). Default: 0 (no rotation)")
     parser.add_argument("--auto_detect_rotation", action="store_true", 
@@ -111,6 +113,9 @@ Examples:
     parser.add_argument("--rotation_confidence_threshold", default=0.7, type=float, 
                        help="Minimum confidence threshold (0.0-1.0) for automatic rotation detection. "
                             "Default: 0.7")
+
+    # Contrast filter arguments
+    parser.add_argument("--apply_contrast_filter", action="store_true", default=False, help="Flag that applies a high-contrast filter to the input prior to being sent to the ocr. Results may vary")
     
     # Add PPTX-specific arguments
     parser.add_argument("--pptx_ocr_backend", default="nemotron", type=str, 
@@ -253,7 +258,8 @@ def main():
                         temperature=args.temperature,
                         rotation_angle=args.rotation_angle,
                         auto_detect_rotation=args.auto_detect_rotation,
-                        rotation_confidence_threshold=args.rotation_confidence_threshold
+                        rotation_confidence_threshold=args.rotation_confidence_threshold,
+                        apply_highcontrast_filter=args.apply_contrast_filter,
                     )
                     if args.checkpointing:
                         output.save_output(output_directory, basename)
@@ -272,7 +278,8 @@ def main():
                     temperature=args.temperature,
                     rotation_angle=args.rotation_angle,
                     auto_detect_rotation=args.auto_detect_rotation,
-                    rotation_confidence_threshold=args.rotation_confidence_threshold
+                    rotation_confidence_threshold=args.rotation_confidence_threshold,
+                    apply_highcontrast_filter=args.apply_contrast_filter,
                 )
                 for file_output, basename in zip(outputs, basenames):
                     file_output.save_output(output_directory, basename)
@@ -346,7 +353,8 @@ def main():
                 temperature=args.temperature,
                 rotation_angle=args.rotation_angle,
                 auto_detect_rotation=args.auto_detect_rotation,
-                rotation_confidence_threshold=args.rotation_confidence_threshold
+                rotation_confidence_threshold=args.rotation_confidence_threshold,
+                apply_highcontrast_filter=args.apply_contrast_filter,
             )
             outputs.save_output(output_directory, output_base)
         except Exception as e:

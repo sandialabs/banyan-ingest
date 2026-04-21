@@ -24,6 +24,7 @@ from ..ocr.nemotron_ocr import NemotronOCR
 from ..utils.evaluate_extraction import evaluate_extraction
 from ..utils.image_rotation import rotate_image, is_valid_rotation_angle
 from ..utils.rotation_detection import detect_rotation_angle_with_fallback
+from ..utils.kmeans import apply_kmeans
 
 class NemoparseProcessor(Processor):
 
@@ -158,9 +159,10 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
-    def _process_image(self, image, temperature=0.0, draw_bboxes=True, re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
-                       auto_detect_rotation: bool = False, 
-                       rotation_confidence_threshold: float = 0.7):
+    def _process_image(self, image, temperature=0.0, draw_bboxes=True,
+                       re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
+                       auto_detect_rotation: bool = False, rotation_confidence_threshold: float = 0.7,
+                       apply_highcontrast_filter: bool = False):
         print(f"\nRunning with temperature {temperature}")
         # Auto-detect rotation using Tesseract OCR if enabled
         if auto_detect_rotation:
@@ -192,7 +194,13 @@ class NemoparseProcessor(Processor):
                 # Handle any errors during rotation detection gracefully
                 logger.warning(f"Rotation detection failed, proceeding without rotation: {e}")
                 # Continue with original image
+
+        if apply_highcontrast_filter:
+            print("Applying kmeans filter")
+            image = apply_kmeans(image)
+
         if rotation_angle != 0:
+            print("Applying rotation")
             image = rotate_image(Image.open(io.BytesIO(image)), rotation_angle)
             # Convert back to bytes for processing
             img_byte_arr = io.BytesIO()
@@ -265,7 +273,10 @@ class NemoparseProcessor(Processor):
                 img_byte_arr = img_byte_arr.getvalue()
                 file_pages.append(img_byte_arr)
         else:
-            if "png" in filepath or "tif" in filepath or "TIF" in filepath:
+            image_extensions = set(["png", "PNG", "jpg", "JPG", "tif", "TIF"])
+            long_image_extensions = set(["jpeg", "JPEG"])
+            filepath_extension = filepath.split('.')[-1]
+            if filepath_extension in image_extensions or filepath_extension in long_image_extensions:
                 with open(filepath, "rb") as image_file:
                     file_pages.append(image_file.read())
             elif "pdf" in filepath:
@@ -292,7 +303,8 @@ class NemoparseProcessor(Processor):
                                temperature=0.0,
                                rotation_angle: Union[int, float] = 0, 
                                auto_detect_rotation: bool = False, 
-                               rotation_confidence_threshold: float = 0.7):
+                               rotation_confidence_threshold: float = 0.7,
+                               apply_highcontrast_filter: bool = False):
         """
         Process multiple documents with optional rotation.
         
@@ -326,7 +338,8 @@ class NemoparseProcessor(Processor):
                     temperature=temperature,
                     rotation_angle=rotation_angle,
                     auto_detect_rotation=auto_detect_rotation,
-                    rotation_confidence_threshold=rotation_confidence_threshold
+                    rotation_confidence_threshold=rotation_confidence_threshold,
+                    apply_highcontrast_filter=apply_highcontrast_filter,
                 )
                 if use_checkpointing:
                     basename = os.path.basename(filepath)
@@ -351,7 +364,8 @@ class NemoparseProcessor(Processor):
                          temperature=0.0,
                          rotation_angle: Union[int, float] = 0,
                          auto_detect_rotation: bool = False,
-                         rotation_confidence_threshold: float = 0.7):
+                         rotation_confidence_threshold: float = 0.7,
+                         apply_highcontrast_filter: bool = False):
         """
         Process a single document with optional rotation.
         
@@ -408,7 +422,8 @@ class NemoparseProcessor(Processor):
                     temperature=temperature,
                     rotation_angle=normalized_angle,
                     auto_detect_rotation=auto_detect_rotation,
-                    rotation_confidence_threshold=rotation_confidence_threshold
+                    rotation_confidence_threshold=rotation_confidence_threshold,
+                    apply_highcontrast_filter=apply_highcontrast_filter,
                 ))
             except Exception as e:
                 logger.error(f"Error processing page {page_num}: {e}")

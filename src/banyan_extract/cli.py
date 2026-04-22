@@ -204,6 +204,28 @@ def main():
             if backend != "nemoparse" and (args.re_run or args.temperature != 0.0):
                 raise ValueError(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).")
 
+    if len(endpoint) == 0:
+        if os.path.exists(args.config_file):
+            config_values = dotenv_values(args.config_file)
+        else:
+            config_values = dict()
+            config_values["NEMOPARSE_ENDPOINT"] = os.getenv("NEMOPARSE_ENDPOINT")
+            config_values["NEMOPARSE_MODEL"] = os.getenv("NEMOPARSE_MODEL")
+
+        if not config_values or config_values["NEMOPARSE_ENDPOINT"] is None or config_values["NEMOPARSE_MODEL"] is None:
+            raise ValueError(f"Config file {args.config_file} not found or empty and environment variables (NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL) not set")
+
+        endpoint = config_values.get("NEMOPARSE_ENDPOINT")
+        model_name = config_values.get("NEMOPARSE_MODEL")
+        if endpoint:
+            logger.info(f"Using endpoint: {endpoint}")
+        if model_name:
+            logger.info(f"Using model: {model_name}")
+
+    if not os.path.exists(output_directory):
+        print(f"Output directory does not exsist, creating {output_directory}")
+        os.mkdirs(output_directory)
+
     if args.is_input_dir:
         input_directory = args.input_file
 
@@ -238,10 +260,6 @@ def main():
                                     logger.warning("For Surya OCR support, install with: pip install .[marker]")
                                 raise ImportError(f"PPTX processing dependencies are missing for file {filepath}") from e
                     else:  # Default to nemoparse for PDF and other files
-                        if len(endpoint) == 0:
-                            config_values = dotenv_values(args.config_file)
-                            endpoint = config_values.get("NEMOPARSE_ENDPOINT")
-                            model_name = config_values.get("NEMOPARSE_MODEL")
                         if endpoint != "":
                             processor = NemoparseProcessor(
                                 endpoint_url=endpoint, 
@@ -298,17 +316,6 @@ def main():
         # Initialize the appropriate processor
         document_processor = None
         if backend == "nemoparse":
-            if len(endpoint) == 0:
-                config_values = dotenv_values(args.config_file)
-                if not config_values:
-                    raise ValueError(f"Config file {args.config_file} not found or empty")
-                endpoint = config_values.get("NEMOPARSE_ENDPOINT")
-                model_name = config_values.get("NEMOPARSE_MODEL")
-                if endpoint:
-                    logger.info(f"Using endpoint: {endpoint}")
-                if model_name:
-                    logger.info(f"Using model: {model_name}")
-
             if endpoint != "":
                 document_processor = NemoparseProcessor(
                     endpoint_url=endpoint, 

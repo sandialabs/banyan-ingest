@@ -28,13 +28,14 @@ from ..utils.kmeans import apply_kmeans
 
 class NemoparseProcessor(Processor):
 
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True):
+    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir=None):
         super().__init__()
         self.nemotron_ocr = NemotronOCR(
             endpoint_url=endpoint_url,
             model_name=model_name
         )
         self.sort_by_position = sort_by_position
+        self.output_dir = output_dir
 
     def sort_elements_by_position(self, bbox_data, width, height):
         """
@@ -159,11 +160,13 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
-    def _process_image(self, image, temperature=0.0, draw_bboxes=True,
+    def _process_image(self, image, page_num, temperature=0.0, draw_bboxes=True,
                        re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
                        auto_detect_rotation: bool = False, rotation_confidence_threshold: float = 0.7,
-                       apply_highcontrast_filter: bool = False):
-        print(f"\nRunning with temperature {temperature}")
+                       apply_highcontrast_filter: bool = False, debug: bool = False):
+
+        if debug: print(f"\nRunning with temperature {temperature}")
+        
         # Auto-detect rotation using Tesseract OCR if enabled
         if auto_detect_rotation:
             try:
@@ -197,7 +200,7 @@ class NemoparseProcessor(Processor):
 
         if apply_highcontrast_filter:
             print("Applying kmeans filter")
-            image = apply_kmeans(image)
+            image = apply_kmeans(image, input_filename=f"page_{page_num}", output_dir=self.output_dir, save_fig=True)
 
         if rotation_angle != 0:
             print("Applying rotation")
@@ -319,7 +322,7 @@ class NemoparseProcessor(Processor):
             
         Returns:
             List of NemoparseOutput objects if use_checkpointing=False, else empty list
-        """
+        """        
         # Log batch processing information
         logger.info(f"Processing batch of {len(filepaths)} documents")
         if auto_detect_rotation:
@@ -327,6 +330,8 @@ class NemoparseProcessor(Processor):
         if rotation_angle != 0:
             logger.info(f"Manual rotation angle for batch: {rotation_angle} degrees")
 
+        self.output_dir = output_dir
+        
         file_outputs = []
         for filepath in filepaths:
             try:
@@ -416,7 +421,8 @@ class NemoparseProcessor(Processor):
             try:
                 logger.debug(f"Processing page {page_num}")
                 output.add_output(self._process_image(
-                    page_image, 
+                    page_image,
+                    page_num,
                     draw_bboxes=draw_bboxes, 
                     re_run=re_run,
                     temperature=temperature,

@@ -1,1 +1,1 @@
-from banyan_extract import MarkerProcessor, PptxProcessor, PaperMageProcessor, NemoparseProcessor
+from banyan_extract import BanyanExtract, MarkerProcessor, PptxProcessor, PaperMageProcessor, NemoparseProcessor

@@ -186,12 +186,13 @@ class CustomPdfConverter(PdfConverter):
 
 class MarkerProcessor(Processor):
     
-    def __init__(self):
+    def __init__(self, output_dir=None):
         super().__init__()
         models = create_model_dict()
         config = {}
         config["format_lines"] = True
         config["force_ocr"] = True
+        self.output_dir = output_dir
         self.converter = CustomPdfConverter(
                         artifact_dict = models,
                         renderer=CustomMarkdownRenderer,

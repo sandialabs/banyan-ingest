@@ -9,6 +9,9 @@ class PaperMageOutput(ModelOutput):
         self.output_data = output_data
         print(self.output_data)
 
+    def get_output_path(self, output_directory, filename_base):
+        return os.path.join(output_directory, f"{filename_base}.json")
+        
     def save_output(self, output_directory, filename_base, mode, options=None):
         save_path = pathlib.Path(output_directory)
 

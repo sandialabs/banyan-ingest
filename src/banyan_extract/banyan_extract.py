@@ -64,6 +64,7 @@ class BanyanExtract:
     default_config["checkpointing"] = False
     default_config["draw_bboxes"] = False
     default_config["sort_by_position"] = True
+    default_config["overwrite"] = False
 
     # Updated Help Descriptions for re_run and temperature
     default_config["re_run"] = False 
@@ -233,7 +234,8 @@ class BanyanExtract:
                                     processor = PptxProcessor(
                                         ocr_backend=self.pptx_ocr_backend,
                                         nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
-                                        nemotron_model=self.pptx_nemotron_model or self.model_name
+                                        nemotron_model=self.pptx_nemotron_model or self.model_name,
+                                        output_dir=self.output_dir,
                                     )
                                 except (NameError, ImportError) as e:
                                     self.logger.error(f"Failed to initialize PptxProcessor for file {filepath}: {e}")
@@ -249,22 +251,29 @@ class BanyanExtract:
                                     endpoint_url=endpoint, 
                                     model_name=model_name, 
                                     sort_by_position=self.sort_by_position,
-                                    output_dir=self.output_dir
+                                    output_dir=self.output_dir,
                                 )
                             else:
                                 raise ValueError("Missing nemotron-parse endpoint URL!")
-    
+
+                            
                         # Process single file
                         output = processor.process_document(
-                            filepath, 
+                            filepath,
+                            draw_bboxes=self.draw_bboxes,
                             re_run=self.re_run,
                             temperature=self.temperature,
                             rotation_angle=self.rotation_angle,
                             auto_detect_rotation=self.auto_detect_rotation,
                             rotation_confidence_threshold=self.rotation_confidence_threshold,
                             apply_highcontrast_filter=self.apply_contrast_filter,
+                            overwrite=self.overwrite,
+                            output_basename=basename,
                         )
-                        output.save_output(output_directory, basename)
+
+                        if output is not None:
+                            output.save_output(output_directory, basename)
+                            
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue
@@ -274,17 +283,19 @@ class BanyanExtract:
                     outputs = document_processor.process_batch_documents(
                         file_paths, 
                         use_checkpointing=self.checkpointing, 
-                        draw_bboxes=self.draw_bboxes, 
                         output_dir=output_directory, 
+                        draw_bboxes=self.draw_bboxes,
                         re_run=self.re_run,
                         temperature=self.temperature,
                         rotation_angle=self.rotation_angle,
                         auto_detect_rotation=self.auto_detect_rotation,
                         rotation_confidence_threshold=self.rotation_confidence_threshold,
                         apply_highcontrast_filter=self.apply_contrast_filter,
+                        output_basenames=basenames,
                     )
                     for file_output, basename in zip(outputs, basenames):
-                        file_output.save_output(output_directory, basename)
+                        if file_output is not None:
+                            file_output.save_output(output_directory, basename)
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
@@ -305,13 +316,13 @@ class BanyanExtract:
                         endpoint_url=endpoint, 
                         model_name=model_name, 
                         sort_by_position=self.sort_by_position,
-                        output_dir=self.output_dir
+                        output_dir=self.output_dir                        
                     )
                 else:
                     raise ValueError("Missing nemotron-parse endpoint URL!")
             elif backend == "marker":
                 try:
-                    document_processor = MarkerProcessor()
+                    document_processor = MarkerProcessor(output_dir=self.output_dir)
                 except NameError as e:
                     self.logger.error("MarkerProcessor not available. Marker PDF processing requires additional dependencies.")
                     self.logger.warning("To enable marker functionality, install with: pip install .[marker]")
@@ -321,7 +332,8 @@ class BanyanExtract:
                     document_processor = PptxProcessor(
                         ocr_backend=self.pptx_ocr_backend,
                         nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
-                        nemotron_model=self.pptx_nemotron_model or self.model_name
+                        nemotron_model=self.pptx_nemotron_model or self.model_name,
+                        output_dir=self.output_dir,
                     )
                 except NameError as e:
                     self.logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
@@ -341,14 +353,17 @@ class BanyanExtract:
             try:
                 outputs = document_processor.process_document(
                     filename, 
+                    draw_bboxes=self.draw_bboxes,
                     re_run=self.re_run,
                     temperature=self.temperature,
                     rotation_angle=self.rotation_angle,
                     auto_detect_rotation=self.auto_detect_rotation,
                     rotation_confidence_threshold=self.rotation_confidence_threshold,
                     apply_highcontrast_filter=self.apply_contrast_filter,
+                    output_basename=output_base,
                 )
-                outputs.save_output(output_directory, output_base)
+                if outputs is not None:
+                    outputs.save_output(output_directory, output_base)
             except Exception as e:
                 self.logger.error(f"Failed to process document {filename}: {e}")
                 raise

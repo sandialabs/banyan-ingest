@@ -81,6 +81,8 @@ Examples:
                        help="If enabled, output will include images showing detected bounding boxes")
     parser.add_argument("--sort_by_position", action="store_true", default=True, 
                        help="Sort elements by spatial position for logical reading order (default: True)")
+    parser.add_argument("--overwrite", action="store_true", default=False, 
+                       help="Overwrite existing markdown output files (default: False)")
     
     # Updated Help Descriptions for re_run and temperature
     parser.add_argument("--re_run", action="store_true", default=False, help="Enables automatic retries. Uses contour area detection to evaluate missed regions, and re-runs the model at higher temperatures (max 3 retries) if the missed area is too high. Note: This flag is ONLY supported by the nemotron parse model.")

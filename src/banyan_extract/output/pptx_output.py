@@ -11,6 +11,9 @@ class PptxOutput(ModelOutput):
         self.images: list = images
         self.metadata = metadata
 
+    def get_output_path(self, output_directory, filename_base):
+        return os.path.join(output_directory, f"{filename_base}.md")
+        
     def save_output(self, output_directory, filename_base):
         with open(os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
             for slide_id, slide in enumerate(self.text):

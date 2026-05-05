@@ -7,7 +7,7 @@ import os
 import tempfile
 import logging
 
-from typing import Union
+from typing import Union, List
 from openai import OpenAI
 from PIL import Image, ImageDraw
 
@@ -306,8 +306,10 @@ class NemoparseProcessor(Processor):
                                temperature=0.0,
                                rotation_angle: Union[int, float] = 0, 
                                auto_detect_rotation: bool = False, 
-                               rotation_confidence_threshold: float = 0.7,
-                               apply_highcontrast_filter: bool = False):
+                               rotation_confidence_threshold: float = 0.7,                               
+                               apply_highcontrast_filter: bool = False,
+                               output_basenames: List[str] | None = None,
+                               overwrite: bool = None):
         """
         Process multiple documents with optional rotation.
         
@@ -333,8 +335,20 @@ class NemoparseProcessor(Processor):
         self.output_dir = output_dir
         
         file_outputs = []
-        for filepath in filepaths:
+        for idx, filepath in enumerate(filepaths):
             try:
+
+                # Check if output file already exists
+                #basename = os.path.splitext(os.path.basename(filepath))[0]
+                if output_basenames is not None:
+                    basename = output_basenames[idx]
+                else:
+                    basename = os.path.splitext(os.path.basename(filepath))[0]
+                output_path = output.get_output_path(self.output_dir, basename)
+                if os.path.exists(output_path) and (not overwrite):
+                    logger.inf(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
+                    continue
+
                 logger.info(f"Processing file: {filepath}")
                 output = self.process_document(
                     filepath, 
@@ -370,7 +384,9 @@ class NemoparseProcessor(Processor):
                          rotation_angle: Union[int, float] = 0,
                          auto_detect_rotation: bool = False,
                          rotation_confidence_threshold: float = 0.7,
-                         apply_highcontrast_filter: bool = False):
+                         apply_highcontrast_filter: bool = False,
+                         output_basename: str | None = None,
+                         overwrite: bool = False):
         """
         Process a single document with optional rotation.
         
@@ -417,6 +433,17 @@ class NemoparseProcessor(Processor):
             raise ValueError(f"Error processing file {filepath}: {e}")
 
         output = NemoparseOutput()
+
+        # Check if output file already exists
+        if output_basename is not None:
+            basename = output_basename
+        else:
+            basename = os.path.splitext(os.path.basename(filepath))[0]
+        output_path = output.get_output_path(self.output_dir, basename)
+        if os.path.exists(output_path) and (not overwrite):
+            logger.info(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
+            return None
+
         for page_num, page_image in enumerate(file_pages, 1):
             try:
                 logger.debug(f"Processing page {page_num}")

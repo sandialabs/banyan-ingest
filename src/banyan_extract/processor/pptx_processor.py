@@ -23,7 +23,7 @@ from ..ocr.nemotron_ocr import NemotronOCR
 
 class PptxProcessor(Processor):
     
-    def __init__(self, ocr_backend="nemotron", nemotron_endpoint="", nemotron_model="nvidia/nemoretriever-parse"):
+    def __init__(self, ocr_backend="nemotron", nemotron_endpoint="", nemotron_model="nvidia/nemoretriever-parse", output_dir=None):
         """
         Initialize PPTX processor with OCR backend selection.
         
@@ -35,6 +35,7 @@ class PptxProcessor(Processor):
         super().__init__()
         self.ocr_backend = None  # Single member variable for OCR backend
         self.ocr_available = False
+        self.output_dir = output_dir
 
         # Initialize selected OCR backend
         if ocr_backend == "nemotron":

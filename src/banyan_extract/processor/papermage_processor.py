@@ -16,9 +16,10 @@ logger = get_logger(__name__)
 
 class PaperMageProcessor(Processor):
     
-    def __init__(self):
+    def __init__(self, output_dir=None):
         super().__init__()
         self.recipe = CoreRecipe()
+        self.output_dir = output_dir
 
     def process_document(self, mode, filepath, options=None, colors=None, rotation_angle: Union[int, float] = 0,
                        auto_detect_rotation: bool = False, 

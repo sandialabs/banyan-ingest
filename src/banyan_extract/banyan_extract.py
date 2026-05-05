@@ -264,8 +264,7 @@ class BanyanExtract:
                             rotation_confidence_threshold=self.rotation_confidence_threshold,
                             apply_highcontrast_filter=self.apply_contrast_filter,
                         )
-                        if self.checkpointing:
-                            output.save_output(output_directory, basename)
+                        output.save_output(output_directory, basename)
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue

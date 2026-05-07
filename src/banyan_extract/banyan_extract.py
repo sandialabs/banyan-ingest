@@ -1,5 +1,3 @@
-
-
 import os
 import sys
 import logging
@@ -7,6 +5,11 @@ import logging
 import argparse
 
 from dotenv import load_dotenv, dotenv_values
+
+from pathlib import Path
+
+from banyan_extract.utils import gather_files
+from banyan_extract.utils.logging_config import setup_logger
 
 from banyan_extract import NemoparseProcessor
 
@@ -19,9 +22,6 @@ try:
     from banyan_extract.processor import PptxProcessor
 except ImportError:
     pass
-
-from banyan_extract.utils.logging_config import setup_logger
-
 
 
 def validate_file_exists(filepath):
@@ -47,7 +47,6 @@ def validate_rotation_confidence_threshold(threshold):
     """Validate rotation confidence threshold regardless of auto-detection flag."""
     if not (0.0 <= threshold <= 1.0):
         raise ValueError(f"rotation_confidence_threshold must be between 0.0 and 1.0, got {threshold}")
-
 
 
 class BanyanExtract:
@@ -206,6 +205,48 @@ class BanyanExtract:
                 self.logger.info(f"Using endpoint: {endpoint}")
             if model_name:
                 self.logger.info(f"Using model: {model_name}")
+
+        # Initialize the appropriate processor
+        document_processor = None
+        if backend == "nemoparse":
+            if endpoint != "":
+                document_processor = NemoparseProcessor(
+                    endpoint_url=endpoint, 
+                    model_name=model_name, 
+                    sort_by_position=self.sort_by_position,
+                    output_dir=output_directory
+                )
+            else:
+                raise ValueError("Missing nemotron-parse endpoint URL!")
+        elif backend == "marker":
+            try:
+                document_processor = MarkerProcessor(output_dir=output_directory)
+            except NameError as e:
+                self.logger.error("MarkerProcessor not available. Marker PDF processing requires additional dependencies.")
+                self.logger.warning("To enable marker functionality, install with: pip install .[marker]")
+                raise ImportError("MarkerProcessor not available. Install marker dependencies with: pip install .[marker]") from e
+        elif backend == "pptx":
+            try:
+                document_processor = PptxProcessor(
+                    ocr_backend=self.pptx_ocr_backend,
+                    nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
+                    nemotron_model=self.pptx_nemotron_model or self.model_name,
+                    output_dir=output_directory,
+                )
+            except NameError as e:
+                self.logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
+                self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
+                raise ImportError("PptxProcessor not available. Install pptx dependencies.") from e
+            except ImportError as e:
+                self.logger.error("PPTX processing dependencies are missing or incomplete.")
+                self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
+                if self.pptx_ocr_backend == "nemotron":
+                    self.logger.warning("For Nemotron OCR support, install with: pip install .[nemotronparse]")
+                elif self.pptx_ocr_backend == "surya":
+                    self.logger.warning("For Surya OCR support, install with: pip install .[marker]")
+                raise ImportError("PPTX processing dependencies are missing. Please install required packages.") from e
+        else:
+            raise ValueError(f"Unknown backend: {backend}")
     
         if not os.path.exists(output_directory):
             print(f"Output directory does not exsist, creating {output_directory}")
@@ -214,13 +255,9 @@ class BanyanExtract:
         if self.is_input_dir:
             input_directory = self.input_file
     
-            file_paths = []
-            basenames = []
-            for root, _, files in os.walk(input_directory):
-                for filename in files:
-                    filepath = os.path.join(root, filename)
-                    file_paths.append(filepath)
-                    basenames.append(os.path.basename(filename))
+            file_paths_relative = gather_files(Path(input_directory), self.effective_extensions, max_depth=self.recursion_depth)
+            file_paths = [str(Path(input_directory) / p) for p in file_paths_relative]
+            basenames = [p.name for p in file_paths_relative]
     
             # For auto mode with directories, determine processor per file
             if backend == "auto":
@@ -235,7 +272,7 @@ class BanyanExtract:
                                         ocr_backend=self.pptx_ocr_backend,
                                         nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
                                         nemotron_model=self.pptx_nemotron_model or self.model_name,
-                                        output_dir=self.output_dir,
+                                        output_dir=output_directory,
                                     )
                                 except (NameError, ImportError) as e:
                                     self.logger.error(f"Failed to initialize PptxProcessor for file {filepath}: {e}")
@@ -251,15 +288,15 @@ class BanyanExtract:
                                     endpoint_url=endpoint, 
                                     model_name=model_name, 
                                     sort_by_position=self.sort_by_position,
-                                    output_dir=self.output_dir,
+                                    output_dir=output_directory,
                                 )
                             else:
                                 raise ValueError("Missing nemotron-parse endpoint URL!")
-
                             
                         # Process single file
                         output = processor.process_document(
                             filepath,
+                            output_dir=output_directory, 
                             draw_bboxes=self.draw_bboxes,
                             re_run=self.re_run,
                             temperature=self.temperature,
@@ -282,8 +319,8 @@ class BanyanExtract:
                 try:
                     outputs = document_processor.process_batch_documents(
                         file_paths, 
-                        use_checkpointing=self.checkpointing, 
                         output_dir=output_directory, 
+                        use_checkpointing=self.checkpointing, 
                         draw_bboxes=self.draw_bboxes,
                         re_run=self.re_run,
                         temperature=self.temperature,
@@ -291,6 +328,7 @@ class BanyanExtract:
                         auto_detect_rotation=self.auto_detect_rotation,
                         rotation_confidence_threshold=self.rotation_confidence_threshold,
                         apply_highcontrast_filter=self.apply_contrast_filter,
+                        overwrite=self.overwrite,
                         output_basenames=basenames,
                     )
                     for file_output, basename in zip(outputs, basenames):
@@ -300,56 +338,6 @@ class BanyanExtract:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
         else:
-            filename = self.input_file
-            if filename.lower().endswith('.pptx'):
-                backend = "pptx"
-            elif filename.lower().endswith('.pdf'):
-                backend = "nemoparse"
-            else:
-                backend = "nemoparse"  # Default to nemoparse for unknown types
-    
-            # Initialize the appropriate processor
-            document_processor = None
-            if backend == "nemoparse":
-                if endpoint != "":
-                    document_processor = NemoparseProcessor(
-                        endpoint_url=endpoint, 
-                        model_name=model_name, 
-                        sort_by_position=self.sort_by_position,
-                        output_dir=self.output_dir                        
-                    )
-                else:
-                    raise ValueError("Missing nemotron-parse endpoint URL!")
-            elif backend == "marker":
-                try:
-                    document_processor = MarkerProcessor(output_dir=self.output_dir)
-                except NameError as e:
-                    self.logger.error("MarkerProcessor not available. Marker PDF processing requires additional dependencies.")
-                    self.logger.warning("To enable marker functionality, install with: pip install .[marker]")
-                    raise ImportError("MarkerProcessor not available. Install marker dependencies with: pip install .[marker]") from e
-            elif backend == "pptx":
-                try:
-                    document_processor = PptxProcessor(
-                        ocr_backend=self.pptx_ocr_backend,
-                        nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
-                        nemotron_model=self.pptx_nemotron_model or self.model_name,
-                        output_dir=self.output_dir,
-                    )
-                except NameError as e:
-                    self.logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
-                    self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
-                    raise ImportError("PptxProcessor not available. Install pptx dependencies.") from e
-                except ImportError as e:
-                    self.logger.error("PPTX processing dependencies are missing or incomplete.")
-                    self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
-                    if self.pptx_ocr_backend == "nemotron":
-                        self.logger.warning("For Nemotron OCR support, install with: pip install .[nemotronparse]")
-                    elif self.pptx_ocr_backend == "surya":
-                        self.logger.warning("For Surya OCR support, install with: pip install .[marker]")
-                    raise ImportError("PPTX processing dependencies are missing. Please install required packages.") from e
-            else:
-                raise ValueError(f"Unknown backend: {backend}")
-    
             try:
                 outputs = document_processor.process_document(
                     filename, 
@@ -360,6 +348,7 @@ class BanyanExtract:
                     auto_detect_rotation=self.auto_detect_rotation,
                     rotation_confidence_threshold=self.rotation_confidence_threshold,
                     apply_highcontrast_filter=self.apply_contrast_filter,
+                    overwrite=self.overwrite,
                     output_basename=output_base,
                 )
                 if outputs is not None:
@@ -369,4 +358,3 @@ class BanyanExtract:
                 raise
     
         self.logger.info("Processing completed successfully!")
-            

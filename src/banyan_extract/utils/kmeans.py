@@ -99,7 +99,6 @@ def apply_kmeans(image_bytes, num_clusters=2, input_filename="filtered_image", s
     segmented_data = np.reshape(labels, [original_shape[0], original_shape[1], 1])
     segmented_data = np.concatenate([segmented_data,segmented_data,segmented_data], axis=-1).astype(np.uint8)
 
-
     # Replace text with original image pixel values (try darkening if possible)
     mask = (segmented_data == 0)
     mask = mask[:,:,0,None]

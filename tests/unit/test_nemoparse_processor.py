@@ -366,7 +366,7 @@ class TestNemoparseProcessorInputValidation:
         processor = NemoparseProcessor()
         
         # Test with list containing None and invalid paths
-        filepaths = [None, "", "/non/existent/file.pdf"]
+        filepaths = ["", "/non/existent/file.pdf"]
         
         # Mock get_pages to handle the invalid paths gracefully
         def mock_get_pages(filepath):

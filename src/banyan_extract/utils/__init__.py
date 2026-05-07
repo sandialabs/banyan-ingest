@@ -27,3 +27,5 @@ from .rotation_detection import (
     TesseractNotFoundError,
     InvalidImageError
 )
+
+from .file_gather import gather_files

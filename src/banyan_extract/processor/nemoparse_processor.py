@@ -28,7 +28,7 @@ from ..utils.kmeans import apply_kmeans
 
 class NemoparseProcessor(Processor):
 
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir=None):
+    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir="./"):
         super().__init__()
         self.nemotron_ocr = NemotronOCR(
             endpoint_url=endpoint_url,
@@ -160,7 +160,7 @@ class NemoparseProcessor(Processor):
 
         return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
 
-    def _process_image(self, image, page_num, temperature=0.0, draw_bboxes=True,
+    def _process_image(self, image, input_filename="image.png", temperature=0.0, draw_bboxes=True,
                        re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
                        auto_detect_rotation: bool = False, rotation_confidence_threshold: float = 0.7,
                        apply_highcontrast_filter: bool = False, debug: bool = False):
@@ -200,7 +200,7 @@ class NemoparseProcessor(Processor):
 
         if apply_highcontrast_filter:
             print("Applying kmeans filter")
-            image = apply_kmeans(image, input_filename=f"page_{page_num}", output_dir=self.output_dir, save_fig=True)
+            image = apply_kmeans(image, input_filename=input_filename, output_dir=self.output_dir, save_fig=True)
 
         if rotation_angle != 0:
             print("Applying rotation")
@@ -301,7 +301,7 @@ class NemoparseProcessor(Processor):
                     raise ValueError(f"Unsupported filetype or error processing file {filepath}: {e}")
         return file_pages
 
-    def process_batch_documents(self, filepaths, use_checkpointing=True, draw_bboxes=True, output_dir="./", 
+    def process_batch_documents(self, filepaths, use_checkpointing=True, output_dir="./", draw_bboxes=True, 
                                re_run=False,
                                temperature=0.0,
                                rotation_angle: Union[int, float] = 0, 
@@ -316,8 +316,8 @@ class NemoparseProcessor(Processor):
         Args:
             filepaths: List of file paths to process
             use_checkpointing: Whether to save outputs as they are processed (default: True)
+            output_dir: What directory to use for checkpointing
             draw_bboxes: Whether to draw bounding boxes on output images (default: True)
-            output_dir: Directory to save outputs (default: "./")
             rotation_angle: Rotation angle in degrees (default: 0)
             auto_detect_rotation: Whether to automatically detect rotation (default: False)
             rotation_confidence_threshold: Minimum confidence for auto rotation detection (default: 0.7)
@@ -332,21 +332,17 @@ class NemoparseProcessor(Processor):
         if rotation_angle != 0:
             logger.info(f"Manual rotation angle for batch: {rotation_angle} degrees")
 
-        self.output_dir = output_dir
-        
         file_outputs = []
         for idx, filepath in enumerate(filepaths):
             try:
 
-                # Check if output file already exists
-                #basename = os.path.splitext(os.path.basename(filepath))[0]
                 if output_basenames is not None:
                     basename = output_basenames[idx]
                 else:
                     basename = os.path.splitext(os.path.basename(filepath))[0]
-                output_path = output.get_output_path(self.output_dir, basename)
+                output_path = NemoparseOutput.get_output_path(self.output_dir, basename)
                 if os.path.exists(output_path) and (not overwrite):
-                    logger.inf(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
+                    logger.info(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
                     continue
 
                 logger.info(f"Processing file: {filepath}")
@@ -374,7 +370,6 @@ class NemoparseProcessor(Processor):
 
         logger.info(f"Batch processing completed. Processed {len(file_outputs) if not use_checkpointing else len(filepaths)} files.")
         return file_outputs
-
 
 
     def process_document(self, filepath,
@@ -439,7 +434,8 @@ class NemoparseProcessor(Processor):
             basename = output_basename
         else:
             basename = os.path.splitext(os.path.basename(filepath))[0]
-        output_path = output.get_output_path(self.output_dir, basename)
+
+        output_path = NemoparseOutput.get_output_path(self.output_dir, basename)
         if os.path.exists(output_path) and (not overwrite):
             logger.info(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
             return None
@@ -449,7 +445,7 @@ class NemoparseProcessor(Processor):
                 logger.debug(f"Processing page {page_num}")
                 output.add_output(self._process_image(
                     page_image,
-                    page_num,
+                    input_filename=f"page_{page_num}.png",
                     draw_bboxes=draw_bboxes, 
                     re_run=re_run,
                     temperature=temperature,

@@ -3,21 +3,7 @@ import os
 import sys
 import logging
 
-from dotenv import load_dotenv, dotenv_values
-from pathlib import Path
-
-from banyan_extract import BanyanExtract, NemoparseProcessor
-
-try:
-    from banyan_extract.processor import MarkerProcessor
-except ImportError:
-    pass
-
-try:
-    from banyan_extract.processor import PptxProcessor
-except ImportError:
-    pass
-
+from banyan_extract import BanyanExtract
 from banyan_extract.utils.logging_config import setup_logger
 
 # Configure logging using centralized setup
@@ -157,7 +143,6 @@ Examples:
             logger.warning("Ensure Tesseract OCR and pytesseract are installed for rotation detection.")
     
     return args
-
 
 
 def main():

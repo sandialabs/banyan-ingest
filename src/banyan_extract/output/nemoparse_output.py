@@ -35,7 +35,8 @@ class NemoparseOutput(ModelOutput):
         self.bboxdata.append(output_data.bbox_json)
         self.bbox_image.append(output_data.bbox_image)
 
-    def get_output_path(self, output_directory, filename_base):
+    @classmethod
+    def get_output_path(cls, output_directory, filename_base):
         return os.path.join(output_directory, f"{filename_base}.md")
         
     def save_output(self, output_directory, filename_base):

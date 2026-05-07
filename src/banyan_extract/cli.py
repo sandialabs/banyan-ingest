@@ -4,6 +4,7 @@ import sys
 import logging
 
 from dotenv import load_dotenv, dotenv_values
+from pathlib import Path
 
 from banyan_extract import BanyanExtract, NemoparseProcessor
 
@@ -64,6 +65,10 @@ Examples:
                        help="Path for output from single or multiple files")
     parser.add_argument("--is_input_dir", action="store_true", 
                        help="Flag to set input file to directory")
+    parser.add_argument("--file_extensions", default=None, type=str, 
+                       help="Comma-separated list of file extensions to process (e.g., 'pdf,pptx'). If not provided, defaults to common document types.")
+    parser.add_argument("--recursion_depth", default=1, type=int,
+                       help="Recursion depth for directory crawling: 0 = only root, 1 = root + immediate subdirectories (default), -1 = infinite, n = specific depth limit")
     parser.add_argument("--output_base", default="banyan-extract-output", type=str, 
                        help="Base name for output files (default: banyan-extract-output)")
     parser.add_argument("--backend", default="auto", type=str, 
@@ -125,6 +130,15 @@ Examples:
     if args.pptx_ocr_backend not in ["surya", "nemotron"]:
         parser.error(f"Invalid PPTX OCR backend: {args.pptx_ocr_backend}. Must be 'surya' or 'nemotron'")
     
+    # Validate and compute effective extensions
+    effective_extensions = {"pdf", "pptx"}
+    if args.file_extensions:
+        exts = [ext.strip().lower().lstrip(".") for ext in args.file_extensions.split(",")]
+        if not exts or any(not ext for ext in exts):
+            parser.error("Invalid --file_extensions provided. Please provide a comma-separated list of extensions.")
+        effective_extensions = set(exts)
+    args.effective_extensions = effective_extensions
+
     # Warn if both manual rotation and auto detection are specified
     if args.auto_detect_rotation and args.rotation_angle != 0:
         logger.warning("Both manual rotation angle and auto rotation detection are specified. "

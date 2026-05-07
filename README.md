@@ -97,6 +97,18 @@ Use `banyan-extract` to run the tool from the command line. Example command that
 banyan-extract --backend nemoparse example.pdf banyan_output/
 ```
 
+### Directory Processing (Recursive)
+Process all supported files in a directory and its subdirectories:
+```bash
+banyan-extract input_dir/ output_dir/ --is_input_dir
+```
+
+### Custom File Extensions
+Filter files by specific extensions:
+```bash
+banyan-extract input_dir/ output_dir/ --is_input_dir --file_extensions "pdf,pptx"
+```
+
 ### PPTX Processing with Default Nemotron OCR
 
 ```bash

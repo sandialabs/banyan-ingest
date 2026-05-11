@@ -1,0 +1,14 @@
+import os
+
+from dotenv import load_dotenv, dotenv_values
+
+
+def get_nemoparse_config(config_file: str | None = ".env"):
+    if os.path.exists(config_file):
+        config_values = dotenv_values(config_file)
+    else:
+        config_values = dict()
+        config_values["NEMOPARSE_ENDPOINT"] = os.getenv("NEMOPARSE_ENDPOINT")
+        config_values["NEMOPARSE_MODEL"] = os.getenv("NEMOPARSE_MODEL")
+
+    return config_values

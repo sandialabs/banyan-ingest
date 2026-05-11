@@ -39,19 +39,44 @@ class NemoparseOutput(ModelOutput):
     def get_output_path(cls, output_directory, filename_base):
         return os.path.join(output_directory, f"{filename_base}.md")
         
-    def save_output(self, output_directory, filename_base):
+    def save_output(self, output_directory, filename_base, save_images=False, save_bbox_data=False, save_tables=False):
         img_index = 0
         img_filenames = []
         for image_list in self.images:
             for img in image_list:
                 img_filename = f"{filename_base}_image_{img_index}.png"
-                try:
-                    img.save(os.path.join(output_directory, img_filename))
-                except Exception as e:
-                    print(f"An error occurred trying to save the image: {img_filename}: {e}")
+                if save_images:
+                    try:
+                        img.save(os.path.join(output_directory, img_filename))
+                    except Exception as e:
+                        print(f"An error occurred trying to save the image: {img_filename}: {e}")
 
                 img_index += 1
                 img_filenames.append(img_filename)
+
+        if save_bbox_data:
+            with open(
+                os.path.join(output_directory, f"{filename_base}_bbox.json"),
+                "w+") as f:
+                for bboxdata in self.bboxdata:
+                    f.write(json.dumps(bboxdata, indent=2))
+
+            for index, bbox_image in enumerate(self.bbox_image):
+                bbox_image.save(os.path.join(output_directory, f"{filename_base}_bbox_image_{index}.png"))
+
+        if save_tables:
+            table_index = 0
+            for table_list in self.tables:
+                for table in table_list:
+                    table_name = f"{filename_base}_table_{table_index}.csv"
+                    converted_table = convert_latex_table_to_csv(table)
+
+                    with open(os.path.join(output_directory, table_name), 'w') as csv_file:
+                        csv_writer = csv.writer(csv_file)
+                        for row in converted_table:
+                            csv_writer.writerow(row)
+
+                    table_index += 1
 
         with open(
             os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
@@ -63,28 +88,6 @@ class NemoparseOutput(ModelOutput):
                         img_index += 1
                     f.write(text + "\n\n")
                 f.write("\n")
-
-        with open(
-            os.path.join(output_directory, f"{filename_base}_bbox.json"),
-            "w+") as f:
-            for bboxdata in self.bboxdata:
-                f.write(json.dumps(bboxdata, indent=2))
-
-        for index, bbox_image in enumerate(self.bbox_image):
-            bbox_image.save(os.path.join(output_directory, f"{filename_base}_bbox_image_{index}.png"))
-
-        table_index = 0
-        for table_list in self.tables:
-            for table in table_list:
-                table_name = f"{filename_base}_table_{table_index}.csv"
-                converted_table = convert_latex_table_to_csv(table)
-
-                with open(os.path.join(output_directory, table_name), 'w') as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    for row in converted_table:
-                        csv_writer.writerow(row)
-
-                table_index += 1
 
     def get_bbox_output(self, with_bbox_data=True):
         dict_data = {}
@@ -121,10 +124,17 @@ class NemoparseOutput(ModelOutput):
 
     def get_output_as_markdown(self):
         full_text = ""
+
+        img_index = 0
         for page_number, page_text in enumerate(self.text):
+            full_text += f"# Page {page_number}\n"
             for text in page_text:
+                if "![{}]({})" in text:
+                    text = text.format(f"Image {img_index}", f"image_{img_index}.png")
+                    img_index += 1
                 full_text += text
             full_text += "\n"
+
         return full_text
 
     def get_content_list(self):

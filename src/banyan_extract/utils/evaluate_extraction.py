@@ -52,7 +52,8 @@ def evaluate_extraction(
     padding_x=150,
     padding_y=150,
     dilate_kernel_size=(13, 13),
-    dilate_iterations=3
+    dilate_iterations=3,
+    verbose=False,
 ):
     """
     Analyzes the quality of object extraction by comparing detected visual content 
@@ -156,17 +157,18 @@ def evaluate_extraction(
     missed_percentage = (total_missed_area / total_image_area) * 100
     should_rerun = min_threshold < missed_percentage < max_threshold
 
-    print(f"\n=== Evaluation Results for {input_filename} (Temp: {temperature}) ===")
-    if should_rerun:
-        print("Coverage: Poor")
-        print(f"Details: Bounding boxes missed {missed_percentage:.1f}% of the detected visual content.")
-    elif missed_percentage <= min_threshold:
-        print("Coverage: Sufficient")
-        print(f"Details: Captured nearly all detected content (Missed: {missed_percentage:.1f}%).")
-    else:
-        print("Coverage: Complex Image")
-        print(f"Details: Missed {missed_percentage:.1f}%. Binary contour detection unreliable for this image type.")
-    print("==================================================\n")
+    if verbose:
+        print(f"\n=== Evaluation Results for {input_filename} (Temp: {temperature}) ===")
+        if should_rerun:
+            print("Coverage: Poor")
+            print(f"Details: Bounding boxes missed {missed_percentage:.1f}% of the detected visual content.")
+        elif missed_percentage <= min_threshold:
+            print("Coverage: Sufficient")
+            print(f"Details: Captured nearly all detected content (Missed: {missed_percentage:.1f}%).")
+        else:
+            print("Coverage: Complex Image")
+            print(f"Details: Missed {missed_percentage:.1f}%. Binary contour detection unreliable for this image type.")
+        print("==================================================\n")
 
     if save_fig and output_dir:
         os.makedirs(output_dir, exist_ok=True)

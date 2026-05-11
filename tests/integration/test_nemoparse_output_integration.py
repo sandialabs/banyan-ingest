@@ -68,7 +68,7 @@ class TestNemoparseOutputIntegration:
         output_dir = temp_output_dir
         base_name = "test_document"
         
-        output.save_output(output_dir, base_name)
+        output.save_output(output_dir, base_name, save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify files were created
         expected_files = [
@@ -194,7 +194,7 @@ class TestNemoparseOutputIntegration:
         
         # Save output
         output_dir = temp_output_dir
-        output.save_output(output_dir, "complex_document")
+        output.save_output(output_dir, "complex_document", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify the output files
         md_file = output_dir / "complex_document.md"
@@ -246,7 +246,7 @@ class TestNemoparseOutputIntegration:
         output.add_output(valid_data)
         
         # Save to a valid directory - should work
-        output.save_output(temp_output_dir, "valid_output")
+        output.save_output(temp_output_dir, "valid_output", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify files were created
         assert (temp_output_dir / "valid_output.md").exists()
@@ -286,7 +286,7 @@ class TestNemoparseOutputIntegration:
             # Current behavior: these paths are accepted but may cause issues
             # This documents the current lack of input validation
             try:
-                output.save_output(temp_output_dir, malicious_path)
+                output.save_output(temp_output_dir, malicious_path, save_images=True, save_bbox_data=True, save_tables=True)
                 # Verify files were created (documenting current behavior)
                 files = list(temp_output_dir.glob(f"{malicious_path}*"))
                 assert len(files) > 0, f"Expected files for path {malicious_path} not found"
@@ -311,7 +311,7 @@ class TestNemoparseOutputIntegration:
         
         for traversal_path in traversal_paths:
             try:
-                output.save_output(temp_output_dir, traversal_path)
+                output.save_output(temp_output_dir, traversal_path, save_images=True, save_bbox_data=True, save_tables=True)
                 # Verify no directory traversal occurred
                 files = list(temp_output_dir.glob("*"))
                 for file in files:
@@ -356,7 +356,7 @@ class TestNemoparseOutputIntegration:
         output.add_output(malicious_data)
         
         # Save and verify the output is sanitized
-        output.save_output(temp_output_dir, "sanitized_output")
+        output.save_output(temp_output_dir, "sanitized_output", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify files were created
         assert (temp_output_dir / "sanitized_output.md").exists()
@@ -413,7 +413,7 @@ class TestNemoparseOutputIntegration:
 
 
         # Save and verify all data is handled correctly
-        output.save_output(temp_output_dir, "edge_cases")
+        output.save_output(temp_output_dir, "edge_cases", save_images=True, save_bbox_data=True, save_tables=True)
 
         # Verify all files were created
         assert (temp_output_dir / "edge_cases.md").exists()

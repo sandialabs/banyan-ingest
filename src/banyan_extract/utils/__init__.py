@@ -29,3 +29,5 @@ from .rotation_detection import (
 )
 
 from .file_gather import gather_files
+
+from .setup_nemoparse_config import get_nemoparse_config 

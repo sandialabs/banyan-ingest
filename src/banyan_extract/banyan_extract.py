@@ -8,8 +8,8 @@ from dotenv import load_dotenv, dotenv_values
 
 from pathlib import Path
 
-from banyan_extract.utils import gather_files
-from banyan_extract.utils.logging_config import setup_logger
+from banyan_extract.utils import gather_files, get_nemoparse_config 
+from banyan_extract.utils.logging_config import get_logger
 
 from banyan_extract import NemoparseProcessor
 
@@ -53,7 +53,7 @@ class BanyanExtract:
     # Default configs [Note: descriptions provided in 'cli.py' file]
     default_config = dict()
     default_config["input_file"] = None
-    default_config["output_dir"] = None
+    default_config["output_dir"] = "./" 
     default_config["is_input_dir"] = False
     default_config["output_base"] = "banyan-extract-output"
     default_config["backend"] = "auto"
@@ -64,6 +64,9 @@ class BanyanExtract:
     default_config["draw_bboxes"] = False
     default_config["sort_by_position"] = True
     default_config["overwrite"] = False
+    default_config["save_images"] = False
+    default_config["save_bbox_data"] = False
+    default_config["save_tables"] = False
 
     # Updated Help Descriptions for re_run and temperature
     default_config["re_run"] = False 
@@ -109,27 +112,23 @@ class BanyanExtract:
         # Assign each config entry as an instance attribute
         for key, value in config.items():
             setattr(self, key, value)
-
-        self.logger = logger
-
-        self.validate_settings()
-
+        
+        if logger is None:
+            self.logger = get_logger("banyan")
+        else:
+            self.logger = logger
 
     def validate_settings(self):
-        
         # Validate input file/directory
         if self.is_input_dir:
             if not os.path.isdir(self.input_file):
                 raise NotADirectoryError(f"Input path is not a directory: {self.input_file}")
             validate_directory_writable(self.input_file)
-            self.logger.info(f"Processing directory: {self.input_file}")
         else:
             validate_file_exists(self.input_file)
-            self.logger.info(f"Processing file: {self.input_file}")
     
         # Validate output directory
         validate_directory_writable(self.output_dir)
-        self.logger.info(f"Output directory: {self.output_dir}")
 
 
     def get_call_config(self):
@@ -139,14 +138,6 @@ class BanyanExtract:
         return call_config
 
     def __call__(self, **kwargs):
-
-        # Check if settings require re-validation
-        should_revalidate = False
-        require_revalidation_keys = ["input_file", "is_input_dir", "output_dir"]
-        for key in require_revalidation_keys:
-            if (key in kwargs) and (kwargs[key] != getattr(self, key)):
-                should_revalidate = True
-                break
 
         # Override default settings with values passed as keyword arguments
         previous_call_config = self.get_call_config()
@@ -159,15 +150,15 @@ class BanyanExtract:
         for key, value in call_config.items():
             setattr(self, key, value)
 
-        # Re-validate settings if needed
-        if should_revalidate:
-            self.validate_settings()
+        self.validate_settings()
 
         output_directory = self.output_dir
         output_base = self.output_base
         endpoint = self.endpoint
         model_name = self.model_name
         backend = self.backend
+
+        self.input_file = str(self.input_file)
     
         # Auto-detect backend based on file extension if backend is "auto"
         if self.backend == "auto":
@@ -189,12 +180,7 @@ class BanyanExtract:
                     raise ValueError(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).")
     
         if len(endpoint) == 0:
-            if os.path.exists(self.config_file):
-                config_values = dotenv_values(self.config_file)
-            else:
-                config_values = dict()
-                config_values["NEMOPARSE_ENDPOINT"] = os.getenv("NEMOPARSE_ENDPOINT")
-                config_values["NEMOPARSE_MODEL"] = os.getenv("NEMOPARSE_MODEL")
+            config_values = get_nemoparse_config(self.config_file)
     
             if not config_values or config_values["NEMOPARSE_ENDPOINT"] is None or config_values["NEMOPARSE_MODEL"] is None:
                 raise ValueError(f"Config file {self.config_file} not found or empty and environment variables (NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL) not set")
@@ -245,7 +231,7 @@ class BanyanExtract:
                 elif self.pptx_ocr_backend == "surya":
                     self.logger.warning("For Surya OCR support, install with: pip install .[marker]")
                 raise ImportError("PPTX processing dependencies are missing. Please install required packages.") from e
-        else:
+        elif backend != "auto":
             raise ValueError(f"Unknown backend: {backend}")
     
         if not os.path.exists(output_directory):
@@ -296,7 +282,6 @@ class BanyanExtract:
                         # Process single file
                         output = processor.process_document(
                             filepath,
-                            output_dir=output_directory, 
                             draw_bboxes=self.draw_bboxes,
                             re_run=self.re_run,
                             temperature=self.temperature,
@@ -309,8 +294,7 @@ class BanyanExtract:
                         )
 
                         if output is not None:
-                            output.save_output(output_directory, basename)
-                            
+                            output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue
@@ -330,17 +314,20 @@ class BanyanExtract:
                         apply_highcontrast_filter=self.apply_contrast_filter,
                         overwrite=self.overwrite,
                         output_basenames=basenames,
+                        save_images=self.save_images,
+                        save_bbox_data=self.save_bbox_data,
+                        save_tables=self.save_tables,
                     )
                     for file_output, basename in zip(outputs, basenames):
                         if file_output is not None:
-                            file_output.save_output(output_directory, basename)
+                            file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
         else:
             try:
-                outputs = document_processor.process_document(
-                    filename, 
+                output = document_processor.process_document(
+                    self.input_file, 
                     draw_bboxes=self.draw_bboxes,
                     re_run=self.re_run,
                     temperature=self.temperature,
@@ -351,10 +338,10 @@ class BanyanExtract:
                     overwrite=self.overwrite,
                     output_basename=output_base,
                 )
-                if outputs is not None:
-                    outputs.save_output(output_directory, output_base)
+                if output is not None:
+                    output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
             except Exception as e:
-                self.logger.error(f"Failed to process document {filename}: {e}")
+                self.logger.error(f"Failed to process document {self.input_file}: {e}")
                 raise
     
         self.logger.info("Processing completed successfully!")

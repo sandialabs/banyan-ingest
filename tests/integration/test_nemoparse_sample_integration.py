@@ -134,7 +134,7 @@ class TestNemoparseSampleIntegration:
         # Save the output to temporary directory
         output_dir = temp_output_dir
         base_name = "sample"
-        output.save_output(output_dir, base_name)
+        output.save_output(output_dir, base_name, save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify expected output files were created
         expected_files = [

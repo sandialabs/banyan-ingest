@@ -89,7 +89,7 @@ class TestNemoparseProcessorIntegration:
         # Save the output to verify file generation
         output_dir = temp_output_dir
         base_name = "complete_workflow_test"
-        output.save_output(output_dir, base_name)
+        output.save_output(output_dir, base_name, save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify expected output files were created
         expected_files = [
@@ -180,7 +180,7 @@ class TestNemoparseProcessorIntegration:
         # Save the output and verify files
         output_dir = temp_output_dir
         base_name = "multi_page_test"
-        output.save_output(output_dir, base_name)
+        output.save_output(output_dir, base_name, save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify expected files for multi-page document
         expected_files = [
@@ -368,7 +368,11 @@ class TestNemoparseProcessorIntegration:
         results_checkpoint = processor.process_batch_documents(
             filepaths, 
             use_checkpointing=True, 
-            output_dir=str(checkpoint_dir)
+            output_dir=str(checkpoint_dir),
+            draw_bboxes=True,
+            save_images=True,
+            save_bbox_data=True,
+            save_tables=True,
         )
         
         # Verify checkpoint files were created
@@ -577,7 +581,7 @@ class TestNemoparseProcessorIntegration:
         assert "Marketing" in all_text
         
         # Save and verify files
-        output.save_output(temp_output_dir, "complex_tables")
+        output.save_output(temp_output_dir, "complex_tables", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify expected files were created
         assert (temp_output_dir / "complex_tables.md").exists()
@@ -667,7 +671,7 @@ class TestNemoparseProcessorIntegration:
         assert "Hello world!" in all_text
 
         # Save and verify files
-        output.save_output(temp_output_dir, "mixed_language")
+        output.save_output(temp_output_dir, "mixed_language", save_images=True, save_bbox_data=True, save_tables=True)
 
         # Verify expected files were created
         assert (temp_output_dir / "mixed_language.md").exists()
@@ -682,7 +686,7 @@ class TestNemoparseProcessorIntegration:
         assert "Hello World! Hello world! Hello world! Hello world!" in md_content
 
         # Save and verify files
-        output.save_output(temp_output_dir, "math_document")
+        output.save_output(temp_output_dir, "math_document", save_images=True, save_bbox_data=True, save_tables=True)
 
         # Verify expected files were created
         assert (temp_output_dir / "math_document.md").exists()

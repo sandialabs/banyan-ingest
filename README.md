@@ -72,6 +72,9 @@ To install the necessary dependencies for these tools please use `pip install .[
 
 Note: please ensure you follow the guidelines and usage licenses of the tools.
 
+### Using Nemotron-parse
+Copy the `.env.example` file change `NEMOTRON_ENDPOINT` to the endpoint of the Nemotron-parse model you want to use.
+
 ## Features
 
 ### Tesseract OSD Rotation Detection
@@ -82,10 +85,6 @@ Note: please ensure you follow the guidelines and usage licenses of the tools.
 - **Comprehensive error handling** with detailed logging
 
 **Requirements**: Tesseract OCR (version 4.0+) and `pytesseract` package for automatic detection.
-
-### Using Nemotron-parse
-
-Copy the `.env.example` file change `NEMOTRON_ENDPOINT` to the endpoint of the Nemotron-parse model you want to use.
 
 ### Examples
 The `example_*.py` scripts contain basic scripts for processing PDF documents using different OCR tools under the hood.
@@ -118,3 +117,17 @@ banyan-extract presentation.pptx output_dir/
 # Process PPTX with Surya OCR backend (explicit)
 banyan-extract presentation.pptx output_dir/ --pptx_ocr_backend surya
 ```
+
+### Saving output
+
+Use `--save_images`, `--save_bbox_data`, and `--save_tables`  if you would like to save all detected images, bbox data (includes text), and tables as csv. 
+
+By default `banyan-extract` cli will save the reconstructed markdown
+
+## Standalone usage
+We are defining standalone usage as using Banyan Extract directly and not as a service/part of a larger framework or workflow.
+
+It is recommended you use the cli or `BanyanExtract` wrapper class for standalone usage.
+
+## Usage as a server
+We recommend you work with processors directly so you can do custom preprocessing as well as data post-processing

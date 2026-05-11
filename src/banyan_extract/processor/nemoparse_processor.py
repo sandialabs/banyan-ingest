@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 # Use centralized logging
 from ..utils.logging_config import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger("banyan")
 
 from .processor import Processor
 from ..converter.pdf_to_image import convert_pdf_to_images, convert_bytes_to_images
@@ -228,16 +228,16 @@ class NemoparseProcessor(Processor):
         lowest_missed = missed_percentage
 
         if not should_rerun:
-            print("Initial pass meets criteria. Proceeding with current output.")
+            logger.info("Initial pass meets criteria. Proceeding with current output.")
             return best_output
 
-        print("Initial pass flagged for improvement. Initiating retry loop.")
+        logger.info("Initial pass flagged for improvement. Initiating retry loop.")
         attempts = 0
         max_attempts = 3
         
         while attempts < max_attempts:
             attempts += 1
-            print(f"\n*** Retry Attempt {attempts} of {max_attempts} (Temp: {re_run_temp}) ***")
+            logger.info(f"\n*** Retry Attempt {attempts} of {max_attempts} (Temp: {re_run_temp}) ***")
             
             # Generate new output
             current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp)
@@ -309,7 +309,10 @@ class NemoparseProcessor(Processor):
                                rotation_confidence_threshold: float = 0.7,                               
                                apply_highcontrast_filter: bool = False,
                                output_basenames: List[str] | None = None,
-                               overwrite: bool = None):
+                               overwrite: bool = False,
+                               save_images: bool = False,
+                               save_bbox_data: bool = False,
+                               save_tables: bool = False):
         """
         Process multiple documents with optional rotation.
         
@@ -345,7 +348,6 @@ class NemoparseProcessor(Processor):
                     logger.info(f"--> output file '{output_path}' already exists; skipping...  (use '--overwrite' option to regenerate output)")
                     continue
 
-                logger.info(f"Processing file: {filepath}")
                 output = self.process_document(
                     filepath, 
                     draw_bboxes=draw_bboxes, 
@@ -359,7 +361,7 @@ class NemoparseProcessor(Processor):
                 if use_checkpointing:
                     basename = os.path.basename(filepath)
                     logger.info(f"Saving output for: {basename}")
-                    output.save_output(output_dir, basename)
+                    output.save_output(output_dir, basename, save_images=save_images, save_bbox_data=save_bbox_data, save_tables=save_tables)
                 else:
                     file_outputs.append(output)
                     
@@ -428,6 +430,7 @@ class NemoparseProcessor(Processor):
             raise ValueError(f"Error processing file {filepath}: {e}")
 
         output = NemoparseOutput()
+        logger.info(f"Processing file: {filepath}")
 
         # Check if output file already exists
         if output_basename is not None:
@@ -457,4 +460,5 @@ class NemoparseProcessor(Processor):
             except Exception as e:
                 logger.error(f"Error processing page {page_num}: {e}")
                 raise
+
         return output

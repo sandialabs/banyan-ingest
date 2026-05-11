@@ -60,7 +60,7 @@ class TestNemoparseOutputExampleBased:
         
         # Step 3: Save the output
         output_path = temp_output_dir
-        document_output.save_output(output_path, "sample_document")
+        document_output.save_output(output_path, "sample_document", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify the output was saved correctly
         assert (temp_output_dir / "sample_document.md").exists()
@@ -104,7 +104,7 @@ class TestNemoparseOutputExampleBased:
             doc_output.add_output(page_data)
         
         # Save the complete document
-        doc_output.save_output(temp_output_dir, "multi_page_doc")
+        doc_output.save_output(temp_output_dir, "multi_page_doc", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Demonstrate accessing page-specific content
         content_list = doc_output.get_content_list()
@@ -203,7 +203,7 @@ class TestNemoparseOutputExampleBased:
         complex_output.add_output(complex_page_data)
         
         # Save the complex document
-        complex_output.save_output(temp_output_dir, "complex_report")
+        complex_output.save_output(temp_output_dir, "complex_report", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify the output
         assert (temp_output_dir / "complex_report.md").exists()
@@ -290,7 +290,7 @@ class TestNemoparseOutputExampleBased:
         # Save each document's output
         for i, result in enumerate(results):
             doc_name = document_names[i]
-            result.save_output(temp_output_dir, doc_name)
+            result.save_output(temp_output_dir, doc_name, save_images=True, save_bbox_data=True, save_tables=True)
             
             # Verify files were created for this document
             assert (temp_output_dir / f"{doc_name}.md").exists()
@@ -430,7 +430,7 @@ class TestNemoparseOutputExampleBased:
             print(f"  {heading}")
         
         # Save with standard formatting
-        custom_output.save_output(temp_output_dir, "custom_formatted")
+        custom_output.save_output(temp_output_dir, "custom_formatted", save_images=True, save_bbox_data=True, save_tables=True)
         
         # Verify all files were created
         assert (temp_output_dir / "custom_formatted.md").exists()

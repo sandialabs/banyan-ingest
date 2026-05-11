@@ -7,7 +7,7 @@ from banyan_extract import BanyanExtract
 from banyan_extract.utils.logging_config import setup_logger
 
 # Configure logging using centralized setup
-logger = setup_logger(__name__)
+logger = setup_logger("banyan")
 
 
 def validate_rotation_confidence_threshold(threshold):
@@ -68,8 +68,16 @@ Examples:
                        help="Model name for nemoretriever-parse model")
     parser.add_argument("--checkpointing", action="store_true", 
                        help="If enabled, batch documents will be saved as they get processed")
+
     parser.add_argument("--draw_bboxes", action="store_true", default=False, 
                        help="If enabled, output will include images showing detected bounding boxes")
+    parser.add_argument("--save_bbox_data", action="store_true", default=False, 
+                       help="If enabled, output will include bbox data")
+    parser.add_argument("--save_images", action="store_true", default=False, 
+                       help="If enabled, output will include images")
+    parser.add_argument("--save_tables", action="store_true", default=False, 
+                       help="If enabled, output will include tables")
+
     parser.add_argument("--sort_by_position", action="store_true", default=True, 
                        help="Sort elements by spatial position for logical reading order (default: True)")
     parser.add_argument("--overwrite", action="store_true", default=False, 

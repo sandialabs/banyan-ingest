@@ -12,6 +12,7 @@ Rather than re-invent the wheel, `banyan_extract` aims to utilize state-of-the-a
 In a Python environment (`conda`, `venv`, etc.), use the following:
 
 ```bash
+cd PATH_TO_REPO/
 pip install banyan-extract
 ```
 
@@ -23,6 +24,8 @@ pip install .
 ```
 
 ### Additional Dependecies
+
+You will need poppler installed. 
 
 #### Rottaion Detection
 For the **rotation detection** functionality, you need Tesseract OCR (version 4.0 or higher recommended) installed on your system

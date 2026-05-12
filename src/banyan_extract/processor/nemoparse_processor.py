@@ -282,15 +282,21 @@ class NemoparseProcessor(Processor):
             if filepath_extension in image_extensions or filepath_extension in long_image_extensions:
                 with open(filepath, "rb") as image_file:
                     file_pages.append(image_file.read())
+            elif "pdf" in filepath:
+                images = convert_pdf_to_images(filepath)
+                for image in images:
+                    img_byte_arr = io.BytesIO()
+                    image.save(img_byte_arr, format='PNG')
+                    img_byte_arr = img_byte_arr.getvalue()
+                    file_pages.append(img_byte_arr)
             else:
                 try:
-                    with open(filepath, 'rb') as file_stream:
-                        images = convert_bytes_to_images(file_stream.read())
-                        for image in images:
-                            img_byte_arr = io.BytesIO()
-                            image.save(img_byte_arr, format='PNG')
-                            img_byte_arr = img_byte_arr.getvalue()
-                            file_pages.append(img_byte_arr)
+                    images = convert_pdf_to_images(filepath)
+                    for image in images:
+                        img_byte_arr = io.BytesIO()
+                        image.save(img_byte_arr, format='PNG')
+                        img_byte_arr = img_byte_arr.getvalue()
+                        file_pages.append(img_byte_arr)
                 except Exception as e:
                     raise ValueError(f"Unsupported filetype or error processing file {filepath}: {e}")
         return file_pages

@@ -1,4 +1,6 @@
-import pdf2image
+import pymupdf
+
+from PIL import Image
 
 def convert_pdf_to_images(file_path, dpi=200):
     """
@@ -8,7 +10,12 @@ def convert_pdf_to_images(file_path, dpi=200):
     Return:
         list of PIL images
     """
-    return pdf2image.convert_from_path(file_path, dpi=dpi)
+    images = []
+    pdf_file = pymupdf.open(file_path) 
+    for page in pdf_file:
+        pix = page.get_pixmap(dpi=dpi)
+        images.append(pix.pil_image())
+    return images
 
 def convert_bytes_to_images(byte_stream, dpi=200):
     """
@@ -18,4 +25,9 @@ def convert_bytes_to_images(byte_stream, dpi=200):
     Return:
         list of PIL images
     """
-    return pdf2image.convert_from_bytes(byte_stream, dpi=dpi)
+    images = []
+    pdf_file = pymupdf.open("pdf", byte_stream)
+    for page in pdf_file:
+        pix = page.get_pixmap(dpi=dpi)
+        images.append(pix.pil_image())
+    return images

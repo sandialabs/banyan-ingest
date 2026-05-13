@@ -25,8 +25,6 @@ pip install .
 
 ### Additional Dependecies
 
-You will need poppler installed. 
-
 #### Rottaion Detection
 For the **rotation detection** functionality, you need Tesseract OCR (version 4.0 or higher recommended) installed on your system
 

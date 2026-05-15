@@ -67,6 +67,7 @@ class BanyanExtract:
     default_config["save_images"] = False
     default_config["save_bbox_data"] = False
     default_config["save_tables"] = False
+    default_config["recursion_depth"] = 1
 
     # Updated Help Descriptions for re_run and temperature
     default_config["re_run"] = False 
@@ -112,6 +113,11 @@ class BanyanExtract:
         # Assign each config entry as an instance attribute
         for key, value in config.items():
             setattr(self, key, value)
+
+        # Add default extensions if none are provided
+        if not hasattr(self, "effective_extensions"):
+            self.effective_extensions = {"pdf", "pptx"}
+            
         
         if logger is None:
             self.logger = get_logger("banyan")

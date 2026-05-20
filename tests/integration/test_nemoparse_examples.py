@@ -53,7 +53,8 @@ class TestNemoparseOutputExampleBased:
             ],
             images=[Image.new('RGB', (100, 100), color='white')],
             tables=[],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
         
         document_output.add_output(page_data)
@@ -99,7 +100,8 @@ class TestNemoparseOutputExampleBased:
                 ],
                 images=[Image.new('RGB', (200, 150), color='lightgray')],
                 tables=[f"Page|Content\{page_num}|Sample content"],
-                bbox_image=Image.new('RGB', (200, 150), color='white')
+                bbox_image=Image.new('RGB', (200, 150), color='white'),
+                page_number=page_num,
             )
             doc_output.add_output(page_data)
         
@@ -197,7 +199,8 @@ class TestNemoparseOutputExampleBased:
             tables=[
                 "Quarter|Revenue|Profit\\Q1|$1.2M|$300K\\Q2|$1.5M|$400K\\Q3|$1.8M|$500K\\Q4|$2.1M|$600K"
             ],
-            bbox_image=Image.new('RGB', (600, 400), color='white')
+            bbox_image=Image.new('RGB', (600, 400), color='white'),
+            page_number=1,
         )
         
         complex_output.add_output(complex_page_data)
@@ -397,7 +400,8 @@ class TestNemoparseOutputExampleBased:
             ],
             images=[Image.new('RGB', (400, 300), color='white')],
             tables=["Section|Word Count\\Abstract|50\\Introduction|100"],
-            bbox_image=Image.new('RGB', (400, 300), color='white')
+            bbox_image=Image.new('RGB', (400, 300), color='white'),
+            page_number=1,
         )
         
         custom_output.add_output(sample_data)

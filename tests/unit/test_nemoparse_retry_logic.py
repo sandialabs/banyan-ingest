@@ -30,6 +30,7 @@ class TestNemoparseProcessorRerunAndTemperature:
             dummy_image,
             draw_bboxes=True,
             temperature=0.7,
+            page_number=None,
         )
 
     @patch('banyan_extract.processor.nemoparse_processor.evaluate_extraction')
@@ -122,8 +123,8 @@ class TestNemoparseProcessorRerunAndTemperature:
         assert mock_run_single.call_count == 2
         
         # Verify the initial call used the base temperature of 0.0
-        mock_run_single.assert_any_call(b"image_data", draw_bboxes=True, temperature=0.0)
+        mock_run_single.assert_any_call(b"image_data", draw_bboxes=True, temperature=0.0, page_number=None)
         
         # Verify the retry attempt switched to the re_run_temp of 0.6
-        mock_run_single.assert_any_call(b"image_data", draw_bboxes=True, temperature=0.6)
+        mock_run_single.assert_any_call(b"image_data", draw_bboxes=True, temperature=0.6, page_number=None)
 

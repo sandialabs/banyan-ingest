@@ -101,7 +101,7 @@ class NemoparseProcessor(Processor):
             logger.error(f"Unexpected error encoding image: {e}")
             return None
 
-    def _run_single_ocr_pass(self, image, draw_bboxes, temperature):
+    def _run_single_ocr_pass(self, image, draw_bboxes, temperature, page_number=None):
         base64_string = self._encode_image(image)
         base64_image = f"data:image/png;base64,{base64_string}"
 
@@ -158,12 +158,13 @@ class NemoparseProcessor(Processor):
                         xmin, xmax = xmax, xmin
                     bbox_draw.rectangle([xmin, ymin, xmax, ymax], outline=color, width=4)
 
-        return NemoparseData(text=txt, bbox_json=bbox_data, images=images, tables=tables, bbox_image=base_image) 
+        return NemoparseData(text=txt, bbox_json=bbox_data, images=images,
+                             tables=tables, bbox_image=base_image, page_number=page_number) 
 
     def _process_image(self, image, input_filename="image.png", temperature=0.0, draw_bboxes=True,
                        re_run=False, re_run_temp=0.4, rotation_angle: float = 0,
                        auto_detect_rotation: bool = False, rotation_confidence_threshold: float = 0.7,
-                       apply_highcontrast_filter: bool = False, debug: bool = False):
+                       apply_highcontrast_filter: bool = False, debug: bool = False, page_number: int | None = None):
 
         if debug: print(f"\nRunning with temperature {temperature}")
         
@@ -211,7 +212,7 @@ class NemoparseProcessor(Processor):
             image = img_byte_arr.getvalue()
 
         # Apply manual rotation if specified (takes precedence over auto-detection)
-        output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=temperature)
+        output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=temperature, page_number=page_number)
 
         if not re_run:
             return output
@@ -240,7 +241,7 @@ class NemoparseProcessor(Processor):
             logger.info(f"\n*** Retry Attempt {attempts} of {max_attempts} (Temp: {re_run_temp}) ***")
             
             # Generate new output
-            current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp)
+            current_output = self._run_single_ocr_pass(image, draw_bboxes=draw_bboxes, temperature=re_run_temp, page_number=page_number)
             
             # Evaluate the new output
             should_rerun, missed_percentage = evaluate_extraction(
@@ -263,6 +264,9 @@ class NemoparseProcessor(Processor):
             if attempts == max_attempts:
                 print(f"Max retries exhausted. Returning best attempt with {lowest_missed:.1f}% missed area.")
 
+        if page_number is not None:
+            best_output.set_page_number(page_number)
+                
         # Return whichever output performed best across all runs
         return best_output
 
@@ -452,6 +456,7 @@ class NemoparseProcessor(Processor):
                     auto_detect_rotation=auto_detect_rotation,
                     rotation_confidence_threshold=rotation_confidence_threshold,
                     apply_highcontrast_filter=apply_highcontrast_filter,
+                    page_number=page_num,
                 ))
             except Exception as e:
                 logger.error(f"Error processing page {page_num}: {e}")

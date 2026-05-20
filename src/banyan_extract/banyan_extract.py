@@ -67,6 +67,7 @@ class BanyanExtract:
     default_config["save_images"] = False
     default_config["save_bbox_data"] = False
     default_config["save_tables"] = False
+    default_config["save_page_numbers"] = False
     default_config["recursion_depth"] = 1
 
     # Updated Help Descriptions for re_run and temperature
@@ -300,7 +301,7 @@ class BanyanExtract:
                         )
 
                         if output is not None:
-                            output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
+                            output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue
@@ -326,7 +327,7 @@ class BanyanExtract:
                     )
                     for file_output, basename in zip(outputs, basenames):
                         if file_output is not None:
-                            file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
+                            file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
@@ -345,7 +346,7 @@ class BanyanExtract:
                     output_basename=output_base,
                 )
                 if output is not None:
-                    output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables)
+                    output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
             except Exception as e:
                 self.logger.error(f"Failed to process document {self.input_file}: {e}")
                 raise

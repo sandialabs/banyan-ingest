@@ -42,7 +42,8 @@ class TestNemoparseOutputUnit:
             bbox_json=[{"element": "text", "bbox": [0, 0, 100, 20]}],
             images=[],
             tables=[],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
         
         # Add the data
@@ -168,7 +169,8 @@ class TestNemoparseOutputEdgeCases:
                 bbox_json=[{"page": i, "element": "text"}],
                 images=[],
                 tables=[],
-                bbox_image=Image.new('RGB', (100, 100), color='white')
+                bbox_image=Image.new('RGB', (100, 100), color='white'),
+                page_number=i+1,
             )
             output.add_output(sample_data)
         

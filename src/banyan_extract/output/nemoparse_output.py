@@ -16,6 +16,7 @@ class NemoparseData:
     images: list
     tables: list
     bbox_image: Image
+    page_number: int
 
 
 class NemoparseOutput(ModelOutput):
@@ -27,6 +28,7 @@ class NemoparseOutput(ModelOutput):
         self.tables: list[list] = []
         self.bboxdata: list[str] = []
         self.bbox_image: list[Image] = []
+        self.page_number_list: list[int] = []
         
     def add_output(self, output_data):
         self.text.append(output_data.text)
@@ -34,12 +36,14 @@ class NemoparseOutput(ModelOutput):
         self.tables.append(output_data.tables)
         self.bboxdata.append(output_data.bbox_json)
         self.bbox_image.append(output_data.bbox_image)
-
+        self.page_number_list.append(output_data.page_number)
+        
     @classmethod
     def get_output_path(cls, output_directory, filename_base):
         return os.path.join(output_directory, f"{filename_base}.md")
         
-    def save_output(self, output_directory, filename_base, save_images=False, save_bbox_data=False, save_tables=False):
+    def save_output(self, output_directory, filename_base, save_images=False,
+                    save_bbox_data=False, save_tables=False, save_page_numbers=False):
         img_index = 0
         img_filenames = []
         for image_list in self.images:
@@ -78,16 +82,45 @@ class NemoparseOutput(ModelOutput):
 
                     table_index += 1
 
+
+        # Track line numbers for each text output 
+        line_ranges = [0]
+
+        # Write final markdown output
         with open(
             os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
             img_index = 0
-            for text_list in self.text:
+            for idx, text_list in enumerate(self.text):
+                line_count = 0
                 for text in text_list:
                     if "![{}]({})" in text:
                         text = text.format(f"Image {img_index}", img_filenames[img_index])
                         img_index += 1
                     f.write(text + "\n\n")
+                    line_count += len(text.split("\n")) + 1
+                    #print(text)
+
                 f.write("\n")
+                
+                prev_line_count = line_ranges[idx]
+                line_ranges.append(line_count + prev_line_count + 1)
+                    
+
+
+
+        if save_page_numbers:
+            with open(
+                os.path.join(output_directory, f"{filename_base}.metadata"), "w") as f:
+                f.write("Page_Number,Markdown_Lines\n")
+                for idx in range(len(self.text)):
+                    text_start = line_ranges[idx]
+                    text_end = line_ranges[idx+1]
+                    page_num = self.page_number_list[idx]
+                    row = f"{page_num},{text_start}-{text_end}\n"
+                    f.write(row)
+                #f.write("\n")
+            
+            
 
     def get_bbox_output(self, with_bbox_data=True):
         dict_data = {}

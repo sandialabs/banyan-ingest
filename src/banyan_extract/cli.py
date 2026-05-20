@@ -77,6 +77,8 @@ Examples:
                        help="If enabled, output will include images")
     parser.add_argument("--save_tables", action="store_true", default=False, 
                        help="If enabled, output will include tables")
+    parser.add_argument("--save_page_numbers", action="store_true", default=False, 
+                       help="If enabled, output will save page numbers associated with output lines")
 
     parser.add_argument("--sort_by_position", action="store_true", default=True, 
                        help="Sort elements by spatial position for logical reading order (default: True)")

@@ -59,7 +59,8 @@ class TestNemoparseOutputIntegration:
                 ],
                 images=[Image.new('RGB', (100, 100), color='white')],
                 tables=["Column1|Column2\\Value1|Value2"],  # Simple table
-                bbox_image=Image.new('RGB', (100, 100), color='white')
+                bbox_image=Image.new('RGB', (100, 100), color='white'),
+                page_number=page_num,
             )
             
             output.add_output(page_data)
@@ -182,13 +183,14 @@ class TestNemoparseOutputIntegration:
         ]
         
         # Add the data to output
-        for page_data in document_pages:
+        for idx, page_data in enumerate(document_pages):
             nemoparse_data = NemoparseData(
                 text=page_data["text"],
                 bbox_json=page_data["bbox_data"],
                 images=page_data["images"],
                 tables=page_data["tables"],
-                bbox_image=Image.new('RGB', (500, 400), color='white')
+                bbox_image=Image.new('RGB', (500, 400), color='white'),
+                page_number=idx+1,
             )
             output.add_output(nemoparse_data)
         
@@ -241,7 +243,8 @@ class TestNemoparseOutputIntegration:
             bbox_json=[{"type": "text", "bbox": [0, 0, 100, 20]}],
             images=[],
             tables=[],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
         output.add_output(valid_data)
         
@@ -271,7 +274,8 @@ class TestNemoparseOutputIntegration:
             bbox_json=[{"type": "text", "bbox": [0, 0, 100, 20]}],
             images=[],
             tables=[],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
         output.add_output(valid_data)
         
@@ -349,7 +353,8 @@ class TestNemoparseOutputIntegration:
             ],
             images=[],
             tables=["Name|Data\\<script>malicious</script>|test"],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
         
         # This should not raise exceptions or cause security issues
@@ -394,7 +399,8 @@ class TestNemoparseOutputIntegration:
             bbox_json=large_bbox_data,
             images=[],
             tables=["Column1|Column2" + ("Value|Value" * 100)],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
 
         # This should handle gracefully without crashing
@@ -406,7 +412,8 @@ class TestNemoparseOutputIntegration:
             bbox_json=[],
             images=[],
             tables=[""],
-            bbox_image=Image.new('RGB', (100, 100), color='white')
+            bbox_image=Image.new('RGB', (100, 100), color='white'),
+            page_number=1,
         )
 
         output.add_output(empty_data)

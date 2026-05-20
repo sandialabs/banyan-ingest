@@ -69,6 +69,7 @@ class BanyanExtract:
     default_config["save_tables"] = False
     default_config["save_page_numbers"] = False
     default_config["recursion_depth"] = 1
+    default_config["return_bytes"] = False
 
     # Updated Help Descriptions for re_run and temperature
     default_config["re_run"] = False 
@@ -244,14 +245,17 @@ class BanyanExtract:
         if not os.path.exists(output_directory):
             print(f"Output directory does not exsist, creating {output_directory}")
             os.mkdirs(output_directory)
-    
+
+
+        bytes_data_list = []
+        
         if self.is_input_dir:
             input_directory = self.input_file
     
             file_paths_relative = gather_files(Path(input_directory), self.effective_extensions, max_depth=self.recursion_depth)
             file_paths = [str(Path(input_directory) / p) for p in file_paths_relative]
             basenames = [p.name for p in file_paths_relative]
-    
+            
             # For auto mode with directories, determine processor per file
             if backend == "auto":
                 for filepath, basename in zip(file_paths, basenames):
@@ -301,7 +305,12 @@ class BanyanExtract:
                         )
 
                         if output is not None:
-                            output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                            if self.return_bytes:
+                                output_bytes = output.return_bytes(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                bytes_data_list.append( (filepath, output_bytes) )
+                            else:
+                                output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                            
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue
@@ -325,9 +334,17 @@ class BanyanExtract:
                         save_bbox_data=self.save_bbox_data,
                         save_tables=self.save_tables,
                     )
+                    file_count = 0
                     for file_output, basename in zip(outputs, basenames):
+                        
                         if file_output is not None:
-                            file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                            if self.return_bytes:
+                                output_bytes = file_output.return_bytes(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                bytes_data_list.append( (file_paths[file_count], output_bytes) )
+                                file_count += 1
+                            else:
+                                file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
@@ -346,9 +363,20 @@ class BanyanExtract:
                     output_basename=output_base,
                 )
                 if output is not None:
-                    output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                    if self.return_bytes:
+                        output_bytes = output.return_bytes(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                        bytes_data_list.append( (self.input_file, output_bytes) )
+                    else:
+                        output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
             except Exception as e:
                 self.logger.error(f"Failed to process document {self.input_file}: {e}")
                 raise
     
         self.logger.info("Processing completed successfully!")
+
+        if self.return_bytes:
+            if self.is_input_dir:
+                return bytes_data_list
+            else:
+                return bytes_data_list[0][-1]
+                

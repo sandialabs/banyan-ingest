@@ -82,7 +82,6 @@ class NemoparseOutput(ModelOutput):
 
                     table_index += 1
 
-
         # Track line numbers for each text output 
         line_ranges = [0]
 
@@ -104,9 +103,6 @@ class NemoparseOutput(ModelOutput):
                 
                 prev_line_count = line_ranges[idx]
                 line_ranges.append(line_count + prev_line_count + 1)
-                    
-
-
 
         if save_page_numbers:
             with open(
@@ -119,7 +115,6 @@ class NemoparseOutput(ModelOutput):
                     row = f"{page_num},{text_start}-{text_end}\n"
                     f.write(row)
                 #f.write("\n")
-
 
     def return_bytes(self, output_directory, filename_base, save_images=False,
                      save_bbox_data=False, save_tables=False, save_page_numbers=False):
@@ -145,8 +140,6 @@ class NemoparseOutput(ModelOutput):
             bytes_return_dict["images"] = image_bytes_list
             bytes_return_dict["image_filenames"] = img_filenames
 
-
-
         if save_bbox_data:
 
             bbox_summary_string = ""
@@ -160,9 +153,6 @@ class NemoparseOutput(ModelOutput):
             for index, bbox_image in enumerate(self.bbox_image):
                 bbox_bytes_list.append(bbox_image)
             bytes_return_dict["bbox_images"] = bbox_bytes_list
-
-
-        
         
         if save_tables:
             table_index = 0
@@ -199,7 +189,6 @@ class NemoparseOutput(ModelOutput):
 
             bytes_return_dict["tables"] = table_bytes_list
 
-
         # Track line numbers for each text output 
         line_ranges = [0]
 
@@ -227,7 +216,6 @@ class NemoparseOutput(ModelOutput):
                     
 
         bytes_return_dict["markdown"] = raw_markdown_string.encode(encoding)
-        
 
         if save_page_numbers:
             #with open(
@@ -312,3 +300,5 @@ class NemoparseOutput(ModelOutput):
         
         return images
 
+    def get_output_status(self):
+        no_outputs = []

@@ -8,8 +8,12 @@ from dotenv import load_dotenv, dotenv_values
 
 from pathlib import Path
 
+from banyan_extract.ocr import ModelVersion
 from banyan_extract.utils import gather_files, get_nemoparse_config 
 from banyan_extract.utils.logging_config import get_logger
+from banyan_extract.converter.libreoffice_converter import LibreOfficeConverter
+from banyan_extract.converter.exceptions import *
+from banyan_extract.converter.utils import file_requires_conversion
 
 from banyan_extract import NemoparseProcessor
 
@@ -55,11 +59,13 @@ class BanyanExtract:
     default_config["input_file"] = None
     default_config["output_dir"] = "./" 
     default_config["is_input_dir"] = False
+    default_config["preserve_input_structure"] = False
     default_config["output_base"] = "banyan-extract-output"
     default_config["backend"] = "auto"
     default_config["config_file"] = ".env"
     default_config["endpoint"] = ""
     default_config["model_name"] = ""
+    default_config["model_version"] = ModelVersion.LATEST 
     default_config["checkpointing"] = False
     default_config["draw_bboxes"] = False
     default_config["sort_by_position"] = True
@@ -83,6 +89,11 @@ class BanyanExtract:
     # Contrast filter arguments
     default_config["apply_contrast_filter"] = False 
     
+    # LibreOffice conversion arguments
+    default_config["libreoffice_path"] = "libreoffice"
+    default_config["conversion_temp_dir"] = None
+    default_config["enable_conversion"] = False
+
     # Add PPTX-specific arguments
     default_config["pptx_ocr_backend"] = "nemotron"
     default_config["pptx_nemotron_endpoint"] = ""
@@ -138,36 +149,59 @@ class BanyanExtract:
         # Validate output directory
         validate_directory_writable(self.output_dir)
 
-
     def get_call_config(self):
         call_config = dict()
         for key in self.valid_call_kwargs:
             call_config[key] = getattr(self, key, None)
         return call_config
 
-    def __call__(self, **kwargs):
+    def convert_file(self, filepath):
+        actual_filepath = filepath
+        if self.converter and file_requires_conversion(filepath):
+            self.logger.info(f"Converting {actual_filepath} to PDF before processing...")
+            try:
+                actual_filepath = self.converter.convert_to_pdf(filepath)
+            except LibreOfficeNotFoundError:
+                self.logger.error(f"LibreOffice not found. Skipping {filepath}")
+            except ConversionFailedError as e:
+                self.logger.error(f"Conversion failed for {filepath}: {e}")
+            except Exception as e:
+                self.logger.error(f"Unexpected conversion error for {filepath}: {e}")
 
+        return actual_filepath
+
+    def __call__(self, **kwargs):
+ 
         # Override default settings with values passed as keyword arguments
         previous_call_config = self.get_call_config()
         call_config = {
             **previous_call_config,
             **kwargs,
         }
-
+ 
         # Assign each config entry as an instance attribute
         for key, value in call_config.items():
             setattr(self, key, value)
-
+ 
         self.validate_settings()
-
+ 
         output_directory = self.output_dir
         output_base = self.output_base
         endpoint = self.endpoint
         model_name = self.model_name
+        model_version = self.model_version
         backend = self.backend
-
+ 
         self.input_file = str(self.input_file)
-    
+
+        # Initialize converter for the duration of the call to manage temp files
+        self.converter = None
+        if self.enable_conversion:
+            self.converter = LibreOfficeConverter(
+                libreoffice_path=self.libreoffice_path,
+                temp_dir=self.conversion_temp_dir
+            )
+
         # Auto-detect backend based on file extension if backend is "auto"
         if self.backend == "auto":
             if self.is_input_dir:
@@ -176,17 +210,18 @@ class BanyanExtract:
             else:
                 # For single files, detect based on extension
                 filename = self.input_file
+                    
                 if filename.lower().endswith('.pptx'):
                     backend = "pptx"
                 elif filename.lower().endswith('.pdf'):
                     backend = "nemoparse"
                 else:
                     backend = "nemoparse"  # Default to nemoparse for unknown types
-    
+
                 # Validation for single file auto-detection
                 if backend != "nemoparse" and (self.re_run or self.temperature != 0.0):
                     raise ValueError(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).")
-    
+
         if len(endpoint) == 0:
             config_values = get_nemoparse_config(self.config_file)
     
@@ -208,7 +243,8 @@ class BanyanExtract:
                     endpoint_url=endpoint, 
                     model_name=model_name, 
                     sort_by_position=self.sort_by_position,
-                    output_dir=output_directory
+                    output_dir=output_directory,
+                    model_version=self.model_version,
                 )
             else:
                 raise ValueError("Missing nemotron-parse endpoint URL!")
@@ -244,7 +280,7 @@ class BanyanExtract:
     
         if not os.path.exists(output_directory):
             print(f"Output directory does not exsist, creating {output_directory}")
-            os.mkdirs(output_directory)
+            os.makedirs(output_directory)
 
 
         bytes_data_list = []
@@ -252,18 +288,19 @@ class BanyanExtract:
         if self.is_input_dir:
             input_directory = self.input_file
     
-            file_paths_relative = gather_files(Path(input_directory), self.effective_extensions, max_depth=self.recursion_depth)
-            file_paths = [str(Path(input_directory) / p) for p in file_paths_relative]
-            basenames = [p.name for p in file_paths_relative]
+            filepaths_relative = gather_files(Path(input_directory), self.effective_extensions, max_depth=self.recursion_depth)
+            filepaths = [str(Path(input_directory) / p) for p in filepaths_relative]
+            relative_paths = [str(p) for p in filepaths_relative]
+            basenames = [p.name for p in filepaths_relative]
             
             # For auto mode with directories, determine processor per file
             if backend == "auto":
-                for filepath, basename in zip(file_paths, basenames):
+                for filepath, basename, relative_path in zip(filepaths, basenames, relative_paths):
                     try:
                         # Determine processor based on file extension
                         if filepath.lower().endswith('.pptx'):
                             if self.re_run or self.temperature != 0.0:
-                                self.logger.warning("WARNING: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.", file=sys.stderr)
+                                self.logger.warning(f"WARNING: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.")
                                 try:
                                     processor = PptxProcessor(
                                         ocr_backend=self.pptx_ocr_backend,
@@ -286,13 +323,17 @@ class BanyanExtract:
                                     model_name=model_name, 
                                     sort_by_position=self.sort_by_position,
                                     output_dir=output_directory,
+                                    model_version=self.model_version,
                                 )
                             else:
                                 raise ValueError("Missing nemotron-parse endpoint URL!")
                             
+                        # Handle conversion for directory files
+                        actual_filepath = self.convert_file(filepath)
+
                         # Process single file
                         output = processor.process_document(
-                            filepath,
+                            actual_filepath,
                             draw_bboxes=self.draw_bboxes,
                             re_run=self.re_run,
                             temperature=self.temperature,
@@ -309,7 +350,13 @@ class BanyanExtract:
                                 output_bytes = output.return_bytes(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                                 bytes_data_list.append( (filepath, output_bytes) )
                             else:
-                                output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                if self.preserve_input_structure:
+                                    output_subdir = os.path.dirname(relative_path)
+                                    output_parent_dir = f"{output_directory}/{output_subdir}"
+                                    os.makedirs(output_parent_dir, exist_ok=True)
+                                else:
+                                    output_parent_dir = output_directory
+                                output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                             
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
@@ -317,8 +364,9 @@ class BanyanExtract:
             else:
                 # Use the selected processor for all files
                 try:
+                    actual_filepaths = [self.convert_file(path) for path in filepaths]
                     outputs = document_processor.process_batch_documents(
-                        file_paths, 
+                        actual_filepaths, 
                         output_dir=output_directory, 
                         use_checkpointing=self.checkpointing, 
                         draw_bboxes=self.draw_bboxes,
@@ -340,18 +388,25 @@ class BanyanExtract:
                         if file_output is not None:
                             if self.return_bytes:
                                 output_bytes = file_output.return_bytes(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
-                                bytes_data_list.append( (file_paths[file_count], output_bytes) )
+                                bytes_data_list.append( (filepaths[file_count], output_bytes) )
                                 file_count += 1
                             else:
-                                file_output.save_output(output_directory, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                if self.preserve_input_structure:
+                                    output_subdir = os.path.dirname(relative_path)
+                                    output_parent_dir = f"{output_directory}/{output_subdir}"
+                                    os.makedirs(output_parent_dir, exist_ok=True)
+                                else:
+                                    output_parent_dir = output_directory
+                                file_output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                                 
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise
         else:
             try:
+                actual_file_path = self.convert_file(self.input_file)
                 output = document_processor.process_document(
-                    self.input_file, 
+                    actual_file_path, 
                     draw_bboxes=self.draw_bboxes,
                     re_run=self.re_run,
                     temperature=self.temperature,
@@ -379,4 +434,7 @@ class BanyanExtract:
                 return bytes_data_list
             else:
                 return bytes_data_list[0][-1]
+        
+        if self.converter:
+            self.converter.cleanup()
                 

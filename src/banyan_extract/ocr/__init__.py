@@ -1,3 +1,3 @@
-from .nemotron_ocr import NemotronOCR
+from .nemotron_ocr import NemotronOCR, ModelVersion
 
-__all__ = ['NemotronOCR']
+__all__ = ['NemotronOCR', 'ModelVersion']

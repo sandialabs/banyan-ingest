@@ -1,8 +1,44 @@
-from openai import OpenAI
 import base64
 import io
-from PIL import Image
 import json
+import re
+import csv
+
+from openai import OpenAI
+from PIL import Image
+from enum import Enum
+
+
+class ModelVersion(Enum):
+    LEGACY = 'legacy' 
+    LATEST = 'latest' # 1.2
+
+    def __str__(self):
+        return self.value
+
+
+def extract_bbox_data_from_response(text: str):
+    _re_extract_class_bbox = re.compile(r'<x_(\d+(?:\.\d+)?)><y_(\d+(?:\.\d+)?)>(.*?)<x_(\d+(?:\.\d+)?)><y_(\d+(?:\.\d+)?)><class_([^>]+)>', re.DOTALL)
+
+    bbox_data = []
+
+    for m in _re_extract_class_bbox.finditer(text):
+        x1, y1, text, x2, y2, cls = m.groups()
+
+        entry = {
+                "type": cls,
+                "text": text,
+                "bbox": {
+                    "xmin": float(x1),
+                    "ymin": float(y1),
+                    "xmax": float(x2),
+                    "ymax": float(y2)
+                    }
+                }
+        bbox_data.append(entry)
+
+    return bbox_data
+
 
 class NemotronOCR:
     """
@@ -10,7 +46,8 @@ class NemotronOCR:
     Provides unified interface for OCR operations using Nemotron parse endpoint.
     """
 
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse"):
+    def __init__(self, endpoint_url="", model_name="nvidia/NVIDIA-Nemotron-Parse-v1.2", model_version=ModelVersion.LATEST):
+        #"nvidia/nemoretriever-parse"):
         """
         Initialize Nemotron OCR client.
         
@@ -24,6 +61,72 @@ class NemotronOCR:
             api_key="non-empty"  # Required but not used for local deployments
         )
         self.model = model_name
+        self.model_version = model_version
+
+    def _get_response(self, base64_image: str, temperature: float = 0.0):
+        content = []
+        tools = []
+        extra_body = {}
+        if self.model_version == ModelVersion.LATEST:
+            prompt_text = "</s><s><predict_bbox><predict_classes><output_markdown><predict_no_text_in_pic>"
+            content.append({
+                            "type": "text",
+                            "text": prompt_text,
+                            })
+
+            extra_body["repetition_penalty"] = 1.1
+            extra_body["top_k"] = 1
+            extra_body["skip_special_tokens"] = False
+        else:
+            tools.append({"type": "function", "function": {"name": "markdown_bbox"}})
+
+        content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": base64_image,
+                            }
+                        })
+
+        messages = [
+            {
+                "role": "user",
+                "content": content,
+            }
+        ]
+
+        completion_args = {
+                    'model': self.model,
+                    'messages': messages,
+                    'temperature': temperature,
+                    }
+
+        if self.model_version == ModelVersion.LATEST:
+            completion_args['extra_body'] = extra_body
+        else:
+            completion_args['tools'] = tools
+
+        try:
+            completion = self.client.chat.completions.create(
+                #model=self.model,
+                #tools=tools,
+                #messages=messages,
+                #temperature=temperature,
+                #extra_body=extra_body,
+                **completion_args
+            )
+
+            if self.model_version == ModelVersion.LATEST:
+                response = completion.choices[0].message.content
+
+                return extract_bbox_data_from_response(response)
+            else:
+                tool_call = completion.choices[0].message.tool_calls[0]
+                response = json.loads(tool_call.function.arguments)
+
+                return response[0]
+        except Exception as e:
+            print(f"Error getting detailed OCR results: {e}")
+            raise
 
     def ocr_image(self, image: Image.Image, temperature: float = 0.0) -> str:
         """
@@ -46,45 +149,15 @@ class NemotronOCR:
         base64_image = f"data:image/png;base64,{base64_string}"
 
         # Prepare API request
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": base64_image,
-                        },
-                    },
-                ]
-            }
-        ]
+        bbox_data = self._get_response(base64_image, temperature=temperature)
 
-        # Call Nemotron parse API
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                tools=[{"type": "function", "function": {"name": "markdown_bbox"}}],
-                messages=messages,
-                temperature=temperature
-            )
+        # Combine all text elements including all element types
+        extracted_text = []
+        for entry in bbox_data:
+            # Include text from all element types
+            extracted_text.append(entry['text'])
 
-            # Extract text from response
-            tool_call = completion.choices[0].message.tool_calls[0]
-            response = json.loads(tool_call.function.arguments)
-            bbox_data = response[0]
-
-            # Combine all text elements including all element types
-            extracted_text = []
-            for entry in bbox_data:
-                # Include text from all element types
-                extracted_text.append(entry['text'])
-
-            return "\n".join(extracted_text)
-
-        except Exception as e:
-            print(f"Error performing OCR with Nemotron: {e}")
-            return ""
+        return "\n".join(extracted_text)
 
     def get_detailed_ocr_results(self, base64_image: str, temperature: float = 0.0):
         """
@@ -97,32 +170,4 @@ class NemotronOCR:
         Returns:
             List of OCR result dictionaries with bounding box information
         """
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": base64_image,
-                        },
-                    },
-                ]
-            }
-        ]
-
-        try:
-            completion = self.client.chat.completions.create(
-                model=self.model,
-                tools=[{"type": "function", "function": {"name": "markdown_bbox"}}],
-                messages=messages,
-                temperature=temperature
-            )
-
-            tool_call = completion.choices[0].message.tool_calls[0]
-            response = json.loads(tool_call.function.arguments)
-            return response[0]
-
-        except Exception as e:
-            print(f"Error getting detailed OCR results: {e}")
-            return []
+        return self._get_response(base64_image, temperature=temperature)

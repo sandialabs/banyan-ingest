@@ -5,6 +5,7 @@ import logging
 
 from banyan_extract import BanyanExtract
 from banyan_extract.utils.logging_config import setup_logger
+from banyan_extract.ocr import ModelVersion
 
 # Configure logging using centralized setup
 logger = setup_logger("banyan")
@@ -51,6 +52,8 @@ Examples:
                        help="Path for output from single or multiple files")
     parser.add_argument("--is_input_dir", action="store_true", 
                        help="Flag to set input file to directory")
+    parser.add_argument("--preserve_input_structure", action="store_true", 
+                       help="Flag to preserve input directory structure in output directory")
     parser.add_argument("--file_extensions", default=None, type=str, 
                        help="Comma-separated list of file extensions to process (e.g., 'pdf,pptx'). If not provided, defaults to common document types.")
     parser.add_argument("--recursion_depth", default=1, type=int,
@@ -66,6 +69,8 @@ Examples:
                        help="Endpoint URL for nemoretriever-parse model")
     parser.add_argument("--model_name", default="", type=str, 
                        help="Model name for nemoretriever-parse model")
+    parser.add_argument("--model_version", default=ModelVersion.LATEST, type=ModelVersion, 
+                       help="Model version for nemoretriever-parse model")
     parser.add_argument("--checkpointing", action="store_true", 
                        help="If enabled, batch documents will be saved as they get processed")
 
@@ -103,6 +108,14 @@ Examples:
     # Contrast filter arguments
     parser.add_argument("--apply_contrast_filter", action="store_true", default=False, help="Flag that applies a high-contrast filter to the input prior to being sent to the ocr. Results may vary")
     
+    # LibreOffice conversion arguments
+    parser.add_argument("--libreoffice_path", default="libreoffice", type=str, 
+                        help="Path to LibreOffice executable (default: libreoffice)")
+    parser.add_argument("--conversion_temp_dir", default=None, type=str, 
+                        help="Temporary directory for converted PDFs (default: system temp)")
+    parser.add_argument("--enable_conversion", action="store_true", default=False, 
+                        help="Enable automatic conversion of Office documents to PDF")
+
     # Add PPTX-specific arguments
     parser.add_argument("--pptx_ocr_backend", default="nemotron", type=str, 
                        help="OCR backend for PPTX processing: surya or nemotron. Default: nemotron")

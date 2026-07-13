@@ -19,7 +19,7 @@ logger = get_logger("banyan")
 from .processor import Processor
 from ..converter.pdf_to_image import convert_pdf_to_images, convert_bytes_to_images
 from ..output.nemoparse_output import NemoparseData, NemoparseOutput
-from ..ocr.nemotron_ocr import NemotronOCR
+from ..ocr.nemotron_ocr import NemotronOCR, ModelVersion
 
 from ..utils.evaluate_extraction import evaluate_extraction
 from ..utils.image_rotation import rotate_image, is_valid_rotation_angle
@@ -28,11 +28,12 @@ from ..utils.kmeans import apply_kmeans
 
 class NemoparseProcessor(Processor):
 
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir="./"):
+    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir="./", model_version=ModelVersion.LATEST):
         super().__init__()
         self.nemotron_ocr = NemotronOCR(
             endpoint_url=endpoint_url,
-            model_name=model_name
+            model_name=model_name,
+            model_version=model_version
         )
         self.sort_by_position = sort_by_position
         self.output_dir = output_dir
@@ -263,11 +264,7 @@ class NemoparseProcessor(Processor):
             # Log when we hit the absolute limit
             if attempts == max_attempts:
                 print(f"Max retries exhausted. Returning best attempt with {lowest_missed:.1f}% missed area.")
-
-        if page_number is not None:
-            best_output.set_page_number(page_number)
                 
-        # Return whichever output performed best across all runs
         return best_output
 
     def get_pages(self, filepath):
@@ -372,7 +369,6 @@ class NemoparseProcessor(Processor):
 
         logger.info(f"Batch processing completed. Processed {len(file_outputs) if not use_checkpointing else len(filepaths)} files.")
         return file_outputs
-
 
     def process_document(self, filepath,
                          draw_bboxes=True, 

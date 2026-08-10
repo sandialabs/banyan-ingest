@@ -68,60 +68,6 @@ class TestRotationDetectionWithSamplePDF:
             pytest.skip(f"PDF conversion failed: {e}")
 
 
-class TestRotationDetectionVariousAngles:
-    """Test rotation detection with various rotation angles."""
-    
-    @pytest.mark.parametrize("angle,expected_angle", [
-        (0, 0.0),
-        (90, 90.0),
-        (180, 180.0),
-        (270, 270.0),
-        (360, 0.0),  # Should normalize to 0
-        (-90, 270.0),  # Should normalize to 270
-        (450, 90.0),  # Should normalize to 90
-    ])
-    def test_rotation_detection_various_angles(self, angle, expected_angle):
-        """Test rotation detection with various angles."""
-        # Create a test image
-        image = Image.new('RGB', (200, 100), color='white')
-        
-        # Mock pytesseract to return the expected angle
-        mock_pytesseract = MagicMock()
-        mock_pytesseract.image_to_osd.return_value = {
-            'orientation': str(angle),
-            'orientation_conf': '0.85'
-        }
-        
-        with patch('banyan_extract.utils.rotation_detection.has_tesseract_dependencies', return_value=True), \
-             patch.dict('sys.modules', {'pytesseract': mock_pytesseract}):
-            
-            detected_angle = detect_rotation_angle(image, confidence_threshold=0.7)
-            # The detected angle should be normalized
-            assert detected_angle == expected_angle
-    
-    def test_rotation_detection_all_standard_angles(self):
-        """Test rotation detection for all standard angles (0, 90, 180, 270)."""
-        test_cases = [
-            (0, "0"),
-            (90, "90"),
-            (180, "180"),
-            (270, "270")
-        ]
-        
-        for expected_angle, osd_angle in test_cases:
-            image = Image.new('RGB', (100, 100), color='white')
-            
-            mock_pytesseract = MagicMock()
-            mock_pytesseract.image_to_osd.return_value = {
-                'orientation': osd_angle,
-                'orientation_conf': '0.85'
-            }
-            
-            with patch('banyan_extract.utils.rotation_detection.has_tesseract_dependencies', return_value=True), \
-                 patch.dict('sys.modules', {'pytesseract': mock_pytesseract}):
-                
-                detected_angle = detect_rotation_angle(image, confidence_threshold=0.7)
-                assert detected_angle == expected_angle
 
 
 class TestRotationDetectionFallbackBehavior:

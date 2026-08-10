@@ -69,22 +69,19 @@ class TestNemoparseSampleIntegration:
             try:
                 output = processor.process_document(str(sample_pdf_path))
             except Exception as pdf_error:
-                # If PDF conversion fails (e.g., poppler not installed), 
-                # fall back to using the expected bbox data but still make real API calls
+                # If PDF conversion fails (e.g., poppler not installed),
+                # save a temporary PNG and process it through public API
                 if "poppler" in str(pdf_error).lower() or "pdfinfo" in str(pdf_error).lower():
                     logger.warning(f"PDF conversion failed (poppler not available): {pdf_error}")
-                    logger.info("Falling back to using sample image with real API calls...")
-                    
-                    # Use a simple white image as input but make real API calls
+                    logger.info("Falling back to using sample PNG image with real API calls...")
+
+                    # Create a temporary PNG file to process through public API
+                    temp_image_path = temp_output_dir / "temp_test_image.png"
                     mock_image = Image.new('RGB', (400, 300), color='white')
-                    img_byte_arr = io.BytesIO()
-                    mock_image.save(img_byte_arr, format='PNG')
-                    mock_pdf_bytes = img_byte_arr.getvalue()
-                    
-                    # Process the mock image with real API calls
-                    output = NemoparseOutput()
-                    processed_page = processor._process_image(mock_pdf_bytes, draw_bboxes=True)
-                    output.add_output(processed_page)
+                    mock_image.save(str(temp_image_path))
+
+                    # Process the PNG image through the public API
+                    output = processor.process_document(str(temp_image_path))
                 else:
                     # Other PDF processing errors - skip the test
                     raise pdf_error

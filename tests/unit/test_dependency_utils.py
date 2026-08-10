@@ -183,13 +183,14 @@ def test_error_handling_in_has_nemotronparse_dependencies():
         assert result is False
 
 
-def test_log_dependency_status_error_handling():
+def test_log_dependency_status_error_handling(capsys):
     """Test that log_dependency_status handles errors gracefully."""
     from banyan_extract.utils.dependencies import log_dependency_status
-    
-    # This should not raise an exception even if there are errors
-    try:
-        log_dependency_status()
-        assert True  # If we get here, the function worked
-    except Exception as e:
-        pytest.fail(f"log_dependency_status raised an exception: {e}")
+
+    # This should not raise an exception and should print dependency information
+    log_dependency_status()
+
+    # Verify it printed something about dependencies to stdout
+    captured = capsys.readouterr()
+    assert len(captured.out) > 0
+    assert 'dependency' in captured.out.lower() or 'available' in captured.out.lower()

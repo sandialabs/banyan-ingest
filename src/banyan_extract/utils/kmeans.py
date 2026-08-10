@@ -9,7 +9,7 @@ def shift_clip_to_uint8(arr, quantile=5):
     # Shift so that roughly 25% of values become negative
     shift_value = np.percentile(arr, quantile)
     if shift_value <= 0:
-        return out
+        return arr.astype(np.uint8)
     shifted = arr - shift_value
 
     # Clip negative values to zero

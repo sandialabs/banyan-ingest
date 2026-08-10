@@ -396,7 +396,7 @@ class BanyanExtract:
                         save_tables=self.save_tables,
                     )
                     file_count = 0
-                    for file_output, basename in zip(outputs, basenames):
+                    for file_output, basename, relative_path in zip(outputs, basenames, relative_paths):
                         
                         if file_output is not None:
                             if self.return_bytes:

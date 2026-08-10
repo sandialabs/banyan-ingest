@@ -131,20 +131,29 @@ class TestMarkerOutputSaveOutput:
         """Test save_output with multiple images."""
         mock_output_data = Mock()
         mock_output_data.markdown = "# Content"
+
+        # Create real PIL images instead of MagicMocks
+        from PIL import Image
         mock_output_data.images = {
-            f"image_{i}.png": MagicMock() for i in range(5)
+            f"image_{i}.png": Image.new('RGB', (10, 10), color=['red', 'blue', 'green', 'yellow', 'white'][i])
+            for i in range(5)
         }
         mock_output_data.tables = []
         mock_output_data.metadata = {}
 
         output = MarkerOutput(mock_output_data)
+        output.save_output(str(tmp_path), "multi_image")
 
-        with patch('os.path.join', side_effect=lambda *args: os.path.join(*args)):
-            with patch.object(mock_output_data.images['image_0.png'], 'save') as mock_save:
-                output.save_output(str(tmp_path), "multi_image")
-                
-                # Verify image save was called
-                mock_save.assert_called_once()
+        # Verify all image files were created
+        assert (tmp_path / "multi_image_image_0.png").exists()
+        assert (tmp_path / "multi_image_image_1.png").exists()
+        assert (tmp_path / "multi_image_image_2.png").exists()
+        assert (tmp_path / "multi_image_image_3.png").exists()
+        assert (tmp_path / "multi_image_image_4.png").exists()
+
+        # Verify they are valid PNG files by opening them
+        saved_image = Image.open(tmp_path / "multi_image_image_0.png")
+        assert saved_image.size == (10, 10)
 
 
 class TestMarkerOutputEdgeCases:
@@ -272,56 +281,66 @@ class TestMarkerOutputFileOperations:
 
     def test_image_file_naming(self, tmp_path):
         """Test that image files are named correctly."""
+        from PIL import Image
+
         mock_output_data = Mock()
         mock_output_data.markdown = "# Content"
-        
-        # Create mock images
-        mock_image1 = MagicMock()
-        mock_image2 = MagicMock()
-        
+
+        # Create real PIL images
+        real_image1 = Image.new('RGB', (10, 10), color='red')
+        real_image2 = Image.new('RGB', (10, 10), color='blue')
+
         mock_output_data.images = {
-            "page1_image1.png": mock_image1,
-            "page2_image1.png": mock_image2
+            "page1_image1.png": real_image1,
+            "page2_image1.png": real_image2
         }
         mock_output_data.tables = []
         mock_output_data.metadata = {}
 
         output = MarkerOutput(mock_output_data)
+        output.save_output(str(tmp_path), "test_images")
 
-        with patch('os.path.join', side_effect=lambda *args: os.path.join(*args)):
-            with patch.object(mock_image1, 'save') as mock_save1:
-                with patch.object(mock_image2, 'save') as mock_save2:
-                    output.save_output(str(tmp_path), "test_images")
-                    
-                    # Verify image save calls with correct filenames
-                    expected_path1 = os.path.join(str(tmp_path), "test_images_page1_image1.png")
-                    expected_path2 = os.path.join(str(tmp_path), "test_images_page2_image1.png")
-                    
-                    mock_save1.assert_called_once_with(expected_path1, 'PNG')
-                    mock_save2.assert_called_once_with(expected_path2, 'PNG')
+        # Verify files were created with correct names
+        image1_path = tmp_path / "test_images_page1_image1.png"
+        image2_path = tmp_path / "test_images_page2_image1.png"
+
+        assert image1_path.exists()
+        assert image2_path.exists()
+
+        # Verify they are valid PNG files
+        saved_image1 = Image.open(image1_path)
+        saved_image2 = Image.open(image2_path)
+        assert saved_image1.size == (10, 10)
+        assert saved_image2.size == (10, 10)
 
     def test_table_file_naming(self, tmp_path):
         """Test that table files are named correctly."""
+        import pandas as pd
+
         mock_output_data = Mock()
         mock_output_data.markdown = "# Content"
         mock_output_data.images = {}
-        
-        # Create mock tables
-        mock_table1 = MagicMock()
-        mock_table2 = MagicMock()
-        mock_output_data.tables = [mock_table1, mock_table2]
+
+        # Create real pandas DataFrames instead of MagicMocks
+        real_table1 = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
+        real_table2 = pd.DataFrame({'X': [5, 6], 'Y': [7, 8]})
+        mock_output_data.tables = [real_table1, real_table2]
         mock_output_data.metadata = {}
 
         output = MarkerOutput(mock_output_data)
+        output.save_output(str(tmp_path), "test_tables")
 
-        with patch('os.path.join', side_effect=lambda *args: os.path.join(*args)):
-            with patch.object(mock_table1, 'to_csv') as mock_to_csv1:
-                with patch.object(mock_table2, 'to_csv') as mock_to_csv2:
-                    output.save_output(str(tmp_path), "test_tables")
-                    
-                    # Verify table to_csv calls with correct filenames
-                    expected_path1 = os.path.join(str(tmp_path), "test_tables_table_0.csv")
-                    expected_path2 = os.path.join(str(tmp_path), "test_tables_table_1.csv")
-                    
-                    mock_to_csv1.assert_called_once_with(expected_path1)
-                    mock_to_csv2.assert_called_once_with(expected_path2)
+        # Verify CSV files were created with correct names
+        table1_path = tmp_path / "test_tables_table_0.csv"
+        table2_path = tmp_path / "test_tables_table_1.csv"
+
+        assert table1_path.exists()
+        assert table2_path.exists()
+
+        # Verify they contain correct data
+        saved_table1 = pd.read_csv(table1_path, index_col=0)
+        saved_table2 = pd.read_csv(table2_path, index_col=0)
+        assert saved_table1.shape == (2, 2)
+        assert saved_table2.shape == (2, 2)
+        assert list(saved_table1.columns) == ['A', 'B']
+        assert list(saved_table2.columns) == ['X', 'Y']

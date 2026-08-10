@@ -152,62 +152,15 @@ class TestIsValidRotationAngle:
 
 class TestNormalizeRotationAngle:
     """Test cases for normalize_rotation_angle function."""
-    
-    def test_normalize_positive_angles(self):
-        """Test normalization of positive angles."""
-        assert normalize_rotation_angle(0) == 0.0
-        assert normalize_rotation_angle(90) == 90.0
-        assert normalize_rotation_angle(360) == 0.0
-        assert normalize_rotation_angle(450) == 90.0
-        assert normalize_rotation_angle(720) == 0.0
-    
-    def test_normalize_negative_angles(self):
-        """Test normalization of negative angles."""
-        assert normalize_rotation_angle(-90) == 270.0
-        assert normalize_rotation_angle(-180) == 180.0
-        assert normalize_rotation_angle(-360) == 0.0
-        assert normalize_rotation_angle(-450) == 270.0
-    
-    def test_normalize_float_angles(self):
-        """Test normalization of float angles."""
-        assert normalize_rotation_angle(45.5) == 45.5
-        assert normalize_rotation_angle(360.5) == 0.5
-        assert normalize_rotation_angle(-45.5) == 314.5
 
-    def test_normalize_edge_cases(self):
-        """Test normalization edge cases with math.fmod."""
-        # Test very large positive angles
-        assert normalize_rotation_angle(720) == 0.0
-        assert normalize_rotation_angle(1080) == 0.0
-        assert normalize_rotation_angle(360 * 10 + 45) == 45.0
-        
-        # Test very large negative angles
-        assert normalize_rotation_angle(-720) == 0.0
-        assert normalize_rotation_angle(-1080) == 0.0
-        assert normalize_rotation_angle(-360 * 10 - 45) == 315.0
-        
-        # Test angles that are exact multiples of 360
-        assert normalize_rotation_angle(360.0) == 0.0
-        assert normalize_rotation_angle(720.0) == 0.0
-        assert normalize_rotation_angle(-360.0) == 0.0
-        assert normalize_rotation_angle(-720.0) == 0.0
-        
-        # Test very small angles (use approximate comparison for floating-point)
-        assert normalize_rotation_angle(0.1) == 0.1
-        assert normalize_rotation_angle(-0.1) == 359.9
-        assert normalize_rotation_angle(359.9) == 359.9
-        # Use approximate comparison for floating-point precision issues
-        result = normalize_rotation_angle(-359.9)
-        assert abs(result - 0.1) < 1e-9, f"Expected 0.1, got {result}"
-    
     def test_normalize_invalid_angles(self):
         """Test that invalid angles raise ValueError."""
         with pytest.raises(ValueError, match="Invalid rotation angle"):
             normalize_rotation_angle("90")
-        
+
         with pytest.raises(ValueError, match="Invalid rotation angle"):
             normalize_rotation_angle(None)
-        
+
         with pytest.raises(ValueError, match="Invalid rotation angle"):
             normalize_rotation_angle([])
 

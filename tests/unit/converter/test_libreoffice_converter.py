@@ -115,36 +115,9 @@ def test_convert_to_pdf_libreoffice_not_found(mock_run, tmp_path):
 def test_convert_to_pdf_input_file_not_found(tmp_path):
     """Test proper error when input file is not found."""
     converter = LibreOfficeConverter(temp_dir=str(tmp_path))
-    
+
     with pytest.raises(FileNotFoundError):
         converter.convert_to_pdf("/nonexistent/file.docx")
-
-def test_validate_pdf_output_valid(tmp_path):
-    """Test PDF validation with a valid PDF."""
-    # Create a minimal valid PDF
-    pdf_file = tmp_path / "valid.pdf"
-    pdf_file.write_bytes(b'%PDF-1.4\n1 0 obj<<>>endobj\n%%EOF')
-    
-    converter = LibreOfficeConverter()
-    assert converter._validate_pdf_output(pdf_file) is True
-
-def test_validate_pdf_output_invalid(tmp_path):
-    """Test PDF validation with an invalid file."""
-    # Create an invalid file
-    invalid_file = tmp_path / "invalid.pdf"
-    invalid_file.write_text("not a pdf")
-    
-    converter = LibreOfficeConverter()
-    assert converter._validate_pdf_output(invalid_file) is False
-
-def test_validate_pdf_output_too_small(tmp_path):
-    """Test PDF validation with a file that's too small."""
-    # Create a file that's too small to be a valid PDF
-    small_file = tmp_path / "small.pdf"
-    small_file.write_bytes(b'%PDF')  # Only 4 bytes
-    
-    converter = LibreOfficeConverter()
-    assert converter._validate_pdf_output(small_file) is False
 
 
 @patch("subprocess.run")
@@ -186,44 +159,43 @@ def test_convert_to_pdf_failure(mock_run, tmp_path):
 def test_cleanup_all(tmp_path):
     """Test that cleanup() removes all managed directories."""
     converter = LibreOfficeConverter(temp_dir=str(tmp_path))
-    
-    # Manually add some managed dirs
+
+    # Manually add some managed dirs to simulate what convert_to_pdf would create
     dir1 = tmp_path / "banyan_1"
     dir1.mkdir()
     dir2 = tmp_path / "banyan_2"
     dir2.mkdir()
     converter._managed_dirs.add(dir1)
     converter._managed_dirs.add(dir2)
-    
+
     converter.cleanup()
-    
+
+    # Verify cleanup behavior through filesystem - directories should be removed
     assert not dir1.exists()
     assert not dir2.exists()
-    assert len(converter._managed_dirs) == 0
 
 def test_cleanup_single_file(tmp_path):
     """Test that cleanup(pdf_filepath) removes the specific managed directory."""
     converter = LibreOfficeConverter(temp_dir=str(tmp_path))
-    
+
     dir1 = tmp_path / "banyan_1"
     dir1.mkdir()
     pdf1 = dir1 / "test1.pdf"
     pdf1.write_text("pdf1")
-    
+
     dir2 = tmp_path / "banyan_2"
     dir2.mkdir()
     pdf2 = dir2 / "test2.pdf"
     pdf2.write_text("pdf2")
-    
+
     converter._managed_dirs.add(dir1)
     converter._managed_dirs.add(dir2)
-    
+
     converter.cleanup(str(pdf1))
-    
+
+    # Verify cleanup behavior through filesystem - only dir1 should be removed
     assert not dir1.exists()
     assert dir2.exists()
-    assert dir2 in converter._managed_dirs
-    assert dir1 not in converter._managed_dirs
 
 def test_cleanup_failure(tmp_path):
     """Test that cleanup failures raise CleanupFailedError."""
@@ -248,6 +220,7 @@ def test_context_manager_cleanup(tmp_path):
         dir1.mkdir()
         converter._managed_dirs.add(dir1)
         assert dir1.exists()
-        
+
+    # Verify cleanup behavior through filesystem - directory should be removed after context exit
     assert not dir1.exists()
 

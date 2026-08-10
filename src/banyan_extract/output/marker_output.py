@@ -21,6 +21,9 @@ class MarkerOutput(ModelOutput):
         self.tables: list = output_data.tables
         self.metadata = output_data.metadata
 
+    def get_output_path(self, output_directory, filename_base):
+        return os.path.join(output_directory, f"{filename_base}.md"),
+
     def save_output(self, output_directory, filename_base):
         with open(
             os.path.join(output_directory, f"{filename_base}.md"),

@@ -212,7 +212,10 @@ class BanyanExtract:
                 filename = self.input_file
                     
                 if filename.lower().endswith('.pptx'):
-                    backend = "pptx"
+                    if self.enable_conversion:
+                        backend = "nemoparse"
+                    else:
+                        backend = "pptx"
                 elif filename.lower().endswith('.pdf'):
                     backend = "nemoparse"
                 else:
@@ -285,6 +288,8 @@ class BanyanExtract:
 
         bytes_data_list = []
         
+        processed_count = 0
+        total_count = 0
         if self.is_input_dir:
             input_directory = self.input_file
     
@@ -298,7 +303,7 @@ class BanyanExtract:
                 for filepath, basename, relative_path in zip(filepaths, basenames, relative_paths):
                     try:
                         # Determine processor based on file extension
-                        if filepath.lower().endswith('.pptx'):
+                        if filepath.lower().endswith('.pptx') and not self.enable_conversion:
                             if self.re_run or self.temperature != 0.0:
                                 self.logger.warning(f"WARNING: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.")
                                 try:
@@ -357,10 +362,18 @@ class BanyanExtract:
                                 else:
                                     output_parent_dir = output_directory
                                 output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+
+                        processed_count += 1
+                        if processed_count > 10 and self.converter:
+                            self.converter.cleanup()
+                            processed_count = 0
+
+                        total_count += 1
                             
                     except Exception as e:
                         self.logger.error(f"Failed to process file {filepath}: {e}")
                         continue
+                self.logger.info(f"Processed {total_count} documents")
             else:
                 # Use the selected processor for all files
                 try:
@@ -398,7 +411,7 @@ class BanyanExtract:
                                 else:
                                     output_parent_dir = output_directory
                                 file_output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
-                                
+                    self.logger.info(f"Processed {file_count} documents")
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
                     raise

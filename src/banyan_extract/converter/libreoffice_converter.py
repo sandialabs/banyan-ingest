@@ -28,7 +28,7 @@ class LibreOfficeConverter:
                  libreoffice_path: str = "libreoffice", 
                  temp_dir: str = None, 
                  cleanup_temp_files: bool = True, 
-                 timeout: int = 120):
+                 timeout: int = 240):
         """
         Initialize LibreOffice converter.
         """

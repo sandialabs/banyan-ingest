@@ -68,7 +68,7 @@ class NemoparseProcessor(Processor):
                 'Caption': 6
             }.get(element['type'], 7)
 
-            return (y_top, x_left, type_priority)
+            return (x_left, y_top, type_priority)
 
         return sorted(bbox_data, key=get_sort_key)
 

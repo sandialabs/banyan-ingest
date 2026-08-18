@@ -87,8 +87,8 @@ Examples:
     parser.add_argument("--return_bytes", action="store_true", default=False, 
                        help="If enabled, output will be returned as bytes")
 
-    parser.add_argument("--sort_by_position", action="store_true", default=True, 
-                       help="Sort elements by spatial position for logical reading order (default: True)")
+    parser.add_argument("--sort_by_position", action="store_true", 
+                       help="Sort elements by spatial position for logical reading order")
     parser.add_argument("--overwrite", action="store_true", default=False, 
                        help="Overwrite existing markdown output files (default: False)")
     

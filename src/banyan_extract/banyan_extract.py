@@ -68,7 +68,7 @@ class BanyanExtract:
     default_config["model_version"] = ModelVersion.LATEST 
     default_config["checkpointing"] = False
     default_config["draw_bboxes"] = False
-    default_config["sort_by_position"] = True
+    default_config["sort_by_position"] = False
     default_config["overwrite"] = False
     default_config["save_images"] = False
     default_config["save_bbox_data"] = False
@@ -233,10 +233,13 @@ class BanyanExtract:
     
             endpoint = config_values.get("NEMOPARSE_ENDPOINT")
             model_name = config_values.get("NEMOPARSE_MODEL")
+            model_version = config_values.get("NEMOPARSE_MODEL_VERSION")
             if endpoint:
                 self.logger.info(f"Using endpoint: {endpoint}")
             if model_name:
                 self.logger.info(f"Using model: {model_name}")
+            if model_version:
+                self.logger.info(f"Using model version: {model_version}")
 
         # Initialize the appropriate processor
         document_processor = None

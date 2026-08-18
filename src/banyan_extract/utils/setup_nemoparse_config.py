@@ -10,5 +10,6 @@ def get_nemoparse_config(config_file: str | None = ".env"):
         config_values = dict()
         config_values["NEMOPARSE_ENDPOINT"] = os.getenv("NEMOPARSE_ENDPOINT", None)
         config_values["NEMOPARSE_MODEL"] = os.getenv("NEMOPARSE_MODEL", None)
+        config_values["NEMOPARSE_MODEL_VERSION"] = os.getenv("NEMOPARSE_MODEL_VERSION", None)
 
     return config_values

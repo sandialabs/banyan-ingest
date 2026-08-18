@@ -180,7 +180,7 @@ class TestBanyanExtractInitialization:
         assert extractor.temperature == 0.5
         assert extractor.re_run == True
         # Defaults for unspecified
-        assert extractor.sort_by_position == True
+        assert extractor.sort_by_position == False
         assert extractor.checkpointing == False
 
 

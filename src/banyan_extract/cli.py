@@ -87,9 +87,17 @@ Examples:
     parser.add_argument("--return_bytes", action="store_true", default=False, 
                        help="If enabled, output will be returned as bytes")
 
-    parser.add_argument("--sort_by_position", action="store_true", 
+    parser.add_argument("--sort_by_position", action="store_true",
                        help="Sort elements by spatial position for logical reading order")
-    parser.add_argument("--overwrite", action="store_true", default=False, 
+    parser.add_argument("--column_detection_mode", default="auto", type=str,
+                       choices=["auto", "none"],
+                       help="Column detection mode for multi-column documents. "
+                            "'auto': Enable gap-based column detection (default). "
+                            "'none': Disable column detection, sort by (x, y) only.")
+    parser.add_argument("--column_gap_threshold", default=0.15, type=float,
+                       help="Minimum normalized gap (0.0-1.0) between x-min values to detect column boundary. "
+                            "Higher values = more tolerant (requires larger gap). Default: 0.15 (15%% of page width)")
+    parser.add_argument("--overwrite", action="store_true", default=False,
                        help="Overwrite existing markdown output files (default: False)")
     
     # Updated Help Descriptions for re_run and temperature

@@ -28,7 +28,28 @@ from ..utils.kmeans import apply_kmeans
 
 class NemoparseProcessor(Processor):
 
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse", sort_by_position=True, output_dir="./", model_version=ModelVersion.LATEST):
+    def __init__(self,
+                 endpoint_url="",
+                 model_name="nvidia/nemoretriever-parse",
+                 sort_by_position=True,
+                 column_detection_mode="auto",
+                 column_gap_threshold=0.15,
+                 output_dir="./",
+                 model_version=ModelVersion.LATEST):
+        """
+        Initialize NemoparseProcessor with column detection configuration.
+
+        Args:
+            endpoint_url: Nemotron OCR endpoint URL
+            model_name: Nemotron model name
+            sort_by_position: Enable position-based sorting (default: True)
+            column_detection_mode: Column detection mode (default: "auto")
+                - "auto": Enable gap-based column detection
+                - "none": Disable column detection (sort by x, y, type only)
+            column_gap_threshold: Minimum normalized gap (0.0-1.0) to detect column boundary (default: 0.15)
+            output_dir: Output directory for processed files
+            model_version: Nemotron model version
+        """
         super().__init__()
         self.nemotron_ocr = NemotronOCR(
             endpoint_url=endpoint_url,
@@ -36,11 +57,77 @@ class NemoparseProcessor(Processor):
             model_version=model_version
         )
         self.sort_by_position = sort_by_position
+        self.column_detection_mode = column_detection_mode
+        self.column_gap_threshold = column_gap_threshold
         self.output_dir = output_dir
+
+    def detect_columns(self, bbox_data, gap_threshold=0.15):
+        """
+        Detect column boundaries by finding large gaps in x-min coordinates.
+
+        Args:
+            bbox_data: List of elements with 'bbox' containing xmin, ymin, xmax, ymax
+            gap_threshold: Minimum normalized gap to consider a column boundary (default: 0.15)
+
+        Returns:
+            List of column boundaries: [0.0, boundary1, boundary2, ..., 1.0]
+        """
+        # Extract x-min coordinates (left edge of each element)
+        x_mins = [elem['bbox']['xmin'] for elem in bbox_data]
+
+        if not x_mins:
+            return [0.0, 1.0]  # Empty document
+
+        # Sort x-min values
+        sorted_x = sorted(x_mins)
+
+        # Find gaps larger than threshold
+        column_boundaries = [0.0]  # Page left edge
+
+        for i in range(len(sorted_x) - 1):
+            gap = sorted_x[i+1] - sorted_x[i]
+            if gap >= gap_threshold:
+                # Column boundary at midpoint of gap
+                boundary = (sorted_x[i] + sorted_x[i+1]) / 2
+                column_boundaries.append(boundary)
+
+        column_boundaries.append(1.0)  # Page right edge
+
+        return column_boundaries
+
+    def assign_elements_to_columns(self, bbox_data, column_boundaries):
+        """
+        Assign each element to a column based on its x-min coordinate.
+
+        Args:
+            bbox_data: List of elements
+            column_boundaries: List of column boundaries from detect_columns()
+
+        Returns:
+            List of (element, column_index) tuples
+        """
+        element_columns = []
+
+        for elem in bbox_data:
+            x_min = elem['bbox']['xmin']
+
+            # Find which column this element belongs to
+            col_idx = 0
+            for i in range(len(column_boundaries) - 1):
+                if column_boundaries[i] <= x_min < column_boundaries[i+1]:
+                    col_idx = i
+                    break
+
+            element_columns.append((elem, col_idx))
+
+        return element_columns
 
     def sort_elements_by_position(self, bbox_data, width, height):
         """
-        Sort document elements based on their spatial position.
+        Sort document elements based on their spatial position using column-aware sorting.
+
+        Special handling: Page footers are extracted and appended after all columns,
+        as they are page-level metadata rather than column content.
 
         Args:
             bbox_data: List of element dictionaries from API response
@@ -50,10 +137,53 @@ class NemoparseProcessor(Processor):
         Returns:
             List of sorted element dictionaries
         """
+        if not bbox_data:
+            return []
+
+        # If column detection is disabled, use simple sorting
+        if self.column_detection_mode == 'none':
+            def get_sort_key(element):
+                bbox = element['bbox']
+                y_top = bbox['ymin'] * height
+                x_left = bbox['xmin'] * width
+                type_priority = {
+                    'Section-header': 0,
+                    'Text': 1,
+                    'Formula': 2,
+                    'Code': 3,
+                    'Picture': 4,
+                    'Table': 5,
+                    'Caption': 6
+                }.get(element['type'], 7)
+                return (x_left, y_top, type_priority)
+
+            return sorted(bbox_data, key=get_sort_key)
+
+        # Column detection enabled (mode='auto')
+        # Phase 0: Pre-filter - Extract page footers for special handling
+        footers = [elem for elem in bbox_data if elem.get('type') == 'Page-footer']
+        non_footer_data = [elem for elem in bbox_data if elem.get('type') != 'Page-footer']
+
+        # If only footers, return them sorted by y-position
+        if not non_footer_data:
+            return sorted(footers, key=lambda e: e['bbox']['ymin'] * height)
+
+        # Phase 1: Detect columns (excluding footers) - use configured threshold
+        column_boundaries = self.detect_columns(non_footer_data, gap_threshold=self.column_gap_threshold)
+
+        # Phase 2: Assign elements to columns
+        element_columns = self.assign_elements_to_columns(non_footer_data, column_boundaries)
+
+        # Group by column
+        from collections import defaultdict
+        columns = defaultdict(list)
+        for elem, col_idx in element_columns:
+            columns[col_idx].append(elem)
+
+        # Phase 3: Sort within each column
         def get_sort_key(element):
             bbox = element['bbox']
             # Convert normalized coordinates to absolute pixels
-            # Use top-left corner (ymin, xmin) instead of center for better reading order
             y_top = bbox['ymin'] * height
             x_left = bbox['xmin'] * width
 
@@ -68,9 +198,24 @@ class NemoparseProcessor(Processor):
                 'Caption': 6
             }.get(element['type'], 7)
 
-            return (x_left, y_top, type_priority)
+            return (y_top, x_left, type_priority)
 
-        return sorted(bbox_data, key=get_sort_key)
+        sorted_columns = {}
+        for col_idx, elems in columns.items():
+            sorted_columns[col_idx] = sorted(elems, key=get_sort_key)
+
+        # Phase 4: Concatenate columns left-to-right
+        result = []
+        for col_idx in sorted(sorted_columns.keys()):
+            result.extend(sorted_columns[col_idx])
+
+        # Phase 5: Append footers at the end (after all columns)
+        # Sort footers by y-position in case there are multiple
+        if footers:
+            sorted_footers = sorted(footers, key=lambda e: e['bbox']['ymin'] * height)
+            result.extend(sorted_footers)
+
+        return result
 
     def _encode_image(self, image):
         """

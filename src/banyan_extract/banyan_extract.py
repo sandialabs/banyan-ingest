@@ -69,6 +69,8 @@ class BanyanExtract:
     default_config["checkpointing"] = False
     default_config["draw_bboxes"] = False
     default_config["sort_by_position"] = False
+    default_config["column_detection_mode"] = "auto"
+    default_config["column_gap_threshold"] = 0.15
     default_config["overwrite"] = False
     default_config["save_images"] = False
     default_config["save_bbox_data"] = False
@@ -246,9 +248,11 @@ class BanyanExtract:
         if backend == "nemoparse":
             if endpoint != "":
                 document_processor = NemoparseProcessor(
-                    endpoint_url=endpoint, 
-                    model_name=model_name, 
+                    endpoint_url=endpoint,
+                    model_name=model_name,
                     sort_by_position=self.sort_by_position,
+                    column_detection_mode=self.column_detection_mode,
+                    column_gap_threshold=self.column_gap_threshold,
                     output_dir=output_directory,
                     model_version=self.model_version,
                 )
@@ -327,9 +331,11 @@ class BanyanExtract:
                         else:  # Default to nemoparse for PDF and other files
                             if endpoint != "":
                                 processor = NemoparseProcessor(
-                                    endpoint_url=endpoint, 
-                                    model_name=model_name, 
+                                    endpoint_url=endpoint,
+                                    model_name=model_name,
                                     sort_by_position=self.sort_by_position,
+                                    column_detection_mode=self.column_detection_mode,
+                                    column_gap_threshold=self.column_gap_threshold,
                                     output_dir=output_directory,
                                     model_version=self.model_version,
                                 )

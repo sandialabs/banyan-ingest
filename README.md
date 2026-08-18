@@ -75,6 +75,22 @@ Copy the `.env.example` file change `NEMOTRON_ENDPOINT` to the endpoint of the N
 
 ## Features
 
+### Column-Aware Sorting for Multi-Column Documents
+- **Automatic column detection** using gap-based analysis for multi-column layouts (scientific papers, newspapers, magazines)
+- **Smart reading order** - reads each column top-to-bottom before moving to the next column
+- **Handles ragged edges** - tolerates x-coordinate variation within columns from OCR noise
+- **Configurable sensitivity** via `column_gap_threshold` parameter (default: 0.15)
+- **Graceful fallback** - automatically detects single-column documents
+- **Special footer handling** - page footers appear after all columns (not mid-column)
+
+**Key Benefits**:
+- Fixes interleaved text from multi-column PDFs
+- Works with 2, 3, or more columns
+- No manual column configuration needed
+- Can be disabled for single-column documents
+
+See [Column Detection Documentation](#column-detection-for-multi-column-documents) for usage examples.
+
 ### Tesseract OSD Rotation Detection
 - **Automatic rotation detection** using Tesseract OCR's Orientation and Script Detection (OSD)
 - **Configurable confidence threshold** for reliable results (default: 0.7)
@@ -115,6 +131,44 @@ banyan-extract presentation.pptx output_dir/
 # Process PPTX with Surya OCR backend (explicit)
 banyan-extract presentation.pptx output_dir/ --pptx_ocr_backend surya
 ```
+
+### Column Detection for Multi-Column Documents
+
+The column detection feature automatically detects and handles multi-column layouts (e.g., scientific papers, newspapers) for correct reading order.
+
+**Default behavior (column detection enabled):**
+```bash
+# Automatically detects and handles multi-column layouts
+banyan-extract paper.pdf output/ --sort_by_position
+```
+
+**Disable column detection** for single-column documents or if detection causes issues:
+```bash
+banyan-extract paper.pdf output/ --column_detection_mode none
+```
+
+**Adjust detection sensitivity:**
+```bash
+# More sensitive (detects columns with smaller gaps)
+banyan-extract paper.pdf output/ --column_gap_threshold 0.10
+
+# Less sensitive (requires larger gaps between columns)
+banyan-extract paper.pdf output/ --column_gap_threshold 0.25
+```
+
+**How it works:**
+- Detects columns by finding gaps in x-coordinates (default threshold: 15% of page width)
+- Sorts elements within each column by y-position (top to bottom)
+- Reads left column completely, then right column (left-to-right order)
+- Handles ragged column edges from OCR variation
+- Page footers always appear after all columns
+
+**When to use:**
+- Scientific papers (typically 1-2 columns)
+- Newspapers (3+ columns)
+- Magazine layouts
+- Conference proceedings
+- Disable for pure single-column documents (slight performance gain)
 
 ### Saving output
 

@@ -1,307 +1,327 @@
 # AGENTS.md - Guidelines for Agentic Coding in banyan-extract
 
-This document provides guidelines for AI agents working on the banyan-extract codebase.
+This file provides guidance to coding agents when working with code in this repository.
+
+## Repository Overview
+
+**Banyan Extract** is a Python module for preparing documents for GenAI and LLM applications. It provides document processing capabilities with support for multiple OCR backends and file formats.
+
+### Key Features
+
+- **Multi-backend OCR**: Supports Nemotron (default) and Surya OCR backends
+- **File format support**: PDF and PPTX processing
+- **Rotation detection**: Automatic rotation correction using Tesseract OCR
+- **Batch processing**: Process directories of documents recursively
+- **Flexible output**: Save markdown, images, bounding boxes, tables, and page numbers
 
 ## Style and Conventions
 
-**No Emojis**: No emojis anywhere in the codebase. If you find one, remove it.
+- **No emojis** anywhere in the codebase. If you find one, remove it.
+- **File naming**: Use descriptive names (e.g., `chat_service.py`, `mcp_tool_manager.py`), not generic ones (`utils.py`, `helpers.py`). Exception: top-level entry points.
+- **File size**: Prefer 400 lines or fewer.
+- **Documentation**: PRs must update relevant docs in `/docs` (architecture, features, API, config, troubleshooting).
+- **Changelog**: Add a 1-2 line entry to `CHANGELOG.md` for every PR. Format: `### PR #<number> - YYYY-MM-DD`.
+- **Date stamps**: Include `YYYY-MM-DD` dates in doc filenames or section headers to track staleness.
 
-**File Naming**: Use descriptive names (e.g., `chat_service.py`, `mcp_tool_manager.py`), not generic ones (`utils.py`, `helpers.py`). Exception: top-level entry points like `atlas/main.py`.
+## Development Commands
 
-**File Size**: Prefer 400 lines or fewer.
+### Installation
 
-**Documentation**: PRs must update relevant docs in `/docs` (architecture, features, API, config, troubleshooting).
-
-**Changelog**: Add a 1-2 line entry to `CHANGELOG.md` for every PR. Format: `### PR #<number> - YYYY-MM-DD`.
-
-**Date Stamps**: Include `YYYY-MM-DD` dates in doc filenames or section headers to track staleness.
-
-## Build/Lint/Test Commands
+```bash
+pip install .                      # Install from source
+pip install .[nemotronparse]       # With Nemotron OCR support (default for PPTX)
+pip install .[marker]              # With Surya OCR support
+pip install .[autorotate]          # With rotation detection support
+pip install -e .                   # Install in development mode
+```
 
 ### Testing
 
-**Run all tests:**
 ```bash
-python3 -m pytest tests/
-```
-
-**Run a single test file:**
-```bash
-python3 -m pytest tests/path/to/test_file.py
-```
-
-**Run a specific test:**
-```bash
-python3 -m pytest tests/path/to/test_file.py::test_name
-```
-
-**Run tests with coverage:**
-```bash
-python3 -m pytest --cov=src/banyan_extract tests/
-```
-
-**Run tests with verbose output:**
-```bash
-python3 -m pytest -v tests/
+python3 -m pytest tests/                                    # Run all tests
+python3 -m pytest tests/unit/                               # Unit tests only
+python3 -m pytest tests/integration/                        # Integration tests only
+python3 -m pytest tests/unit/test_nemoparse_processor.py    # Specific test file
+python3 -m pytest tests/unit/test_nemoparse_processor.py::test_nemoparse_processor_initialization  # Specific test
+python3 -m pytest -v tests/                                 # Verbose output
+python3 -m pytest -s tests/                                 # See print output
+python3 -m pytest -x tests/                                 # Stop on first failure
+python3 -m pytest --cov=src/banyan_extract tests/           # With coverage
+python3 -m pytest -m unit tests/                            # Only unit-marked tests
+python3 -m pytest -m integration tests/                     # Only integration-marked tests
+python3 -m pytest -m "not slow" tests/                      # Skip slow tests
 ```
 
 ### Linting and Formatting
 
-**Run ruff linter (if available):**
 ```bash
-python3 -m ruff check src/
-```
-
-**Run ruff formatter (if available):**
-```bash
-python3 -m ruff format src/
-```
-
-**Run flake8 (if available):**
-```bash
-python3 -m flake8 src/
+python3 -m ruff check src/        # Run ruff linter
+python3 -m ruff format src/       # Run ruff formatter
+python3 -m flake8 src/            # Run flake8
 ```
 
 ### Building
 
-**Build the package:**
 ```bash
-python3 -m pip install .
+python -m build                   # Build the package
+./build_pypi.sh                   # Build for PyPI distribution
 ```
 
-**Build with optional dependencies:**
+### Running
+
 ```bash
-python3 -m pip install .[marker]
-python3 -m pip install .[nemotronparse]
+banyan-extract input.pdf output_dir/                              # Single PDF
+banyan-extract presentation.pptx output_dir/                      # PPTX with default Nemotron OCR
+banyan-extract input_dir/ output_dir/ --is_input_dir              # Directory recursively
+banyan-extract input.pdf output_dir/ --auto_detect_rotation       # With rotation detection
+banyan-extract input.pdf output_dir/ --backend nemoparse          # Specific backend
 ```
 
-**Install in development mode:**
-```bash
-python3 -m pip install -e .
+## Code Architecture
+
+### High-Level Structure
+
 ```
+src/banyan_extract/
+├── cli.py                          # CLI entry point and argument parsing
+├── banyan_extract.py               # Main wrapper class (BanyanExtract)
+├── processor/                      # Document processors (strategy pattern)
+│   ├── processor.py                # Abstract base class
+│   ├── nemoparse_processor.py      # Nemotron Parse processor
+│   ├── marker_processor.py         # Marker PDF processor
+│   ├── pptx_processor.py          # PPTX processor
+│   └── papermage_processor.py      # PaperMage processor
+├── output/                         # Output handlers
+│   ├── output.py                   # Abstract base class
+│   ├── nemoparse_output.py         # Nemoparse output handler
+│   ├── marker_output.py            # Marker output handler
+│   ├── pptx_output.py             # PPTX output handler
+│   └── papermage_output.py         # PaperMage output handler
+├── converter/                      # File conversion utilities
+│   ├── pdf_to_image.py             # PDF to image conversion
+│   └── latex_table_to_csv.py       # LaTeX table conversion
+├── ocr/                            # OCR modules
+│   └── nemotron_ocr.py             # Nemotron OCR wrapper
+└── utils/                          # Utility functions
+    ├── image_rotation.py           # Image rotation utilities
+    ├── rotation_detection.py       # Tesseract-based rotation detection
+    ├── dependencies.py             # Dependency checking
+    ├── file_gather.py              # File discovery utilities
+    └── logging_config.py           # Logging configuration
+```
+
+### Key Design Patterns
+
+1. **Processor Pattern**: All processors inherit from the abstract `Processor` base class
+   - Common interface: `process_document()` and `process_batch_documents()`
+   - Each processor handles a specific document type/backend
+
+2. **Output Handler Pattern**: Each processor has a corresponding output class
+   - Inherits from `ModelOutput` base class
+   - Handles saving extracted content in various formats
+
+3. **Strategy Pattern**: Different OCR backends can be selected
+   - PPTX processor supports both Nemotron and Surya OCR
+   - Backend selection via configuration
+
+4. **Factory Pattern**: CLI acts as a factory
+   - Creates appropriate processor instances based on file type and arguments
+   - Auto-detects backend when not explicitly specified
+
+### Data Flow
+
+1. **CLI Entry**: User runs `banyan-extract` command with arguments
+2. **Processor Selection**: CLI determines appropriate processor based on file extension, backend argument, or auto-detection
+3. **Document Processing**: Selected processor converts to images (if needed), applies rotation correction (if enabled), performs OCR, extracts text/tables/content
+4. **Output Generation**: Processor creates output objects containing extracted text, images, bounding boxes, tables, and page numbers
+5. **Output Saving**: Output objects save results as markdown, images, bounding box data, tables as CSV
+
+### Backend Support Matrix
+
+| Processor | OCR Backend | Rotation Detection | Batch Processing |
+|-----------|-------------|--------------------|------------------|
+| NemoparseProcessor | Nemotron | Yes | Yes |
+| MarkerProcessor | Surya | No | Yes |
+| PptxProcessor | Nemotron (default) | No | Yes |
+| PptxProcessor | Surya | No | Yes |
+| PaperMageProcessor | PaperMage | No | Yes |
 
 ## Code Style Guidelines
 
 ### Imports
 
-1. **Group imports** in the following order:
-   - Standard library imports
-   - Third-party library imports
-   - Local application imports
+Group imports in this order: standard library, third-party, local application. Use absolute imports for local modules. Avoid wildcard imports (except in `__init__.py`).
 
-2. **Use absolute imports** for local modules:
-   ```python
-   from banyan_extract.processor import Processor
-   ```
-
-3. **Avoid wildcard imports** (except in `__init__.py`):
-   ```python
-   # Good
-   from module import specific_function
-   
-   # Avoid
-   from module import *
-   ```
+```python
+from banyan_extract.processor import Processor
+```
 
 ### Formatting
 
-1. **Line length**: Maximum 120 characters
-2. **Indentation**: 4 spaces (no tabs)
-3. **Spacing**:
-   - Two blank lines around top-level functions and classes
-   - One blank line around method definitions
-   - No spaces inside parentheses, brackets, or braces
-4. **Quotes**: Use double quotes for strings unless single quotes are needed
-5. **Docstrings**: Use Google-style docstrings for public functions and classes
+- **Line length**: Maximum 120 characters
+- **Indentation**: 4 spaces (no tabs)
+- **Spacing**: Two blank lines around top-level functions/classes, one blank line around methods
+- **Quotes**: Double quotes for strings unless single quotes are needed
+- **Docstrings**: Google-style for public functions and classes
 
-### Types
+### Type Hints
 
-1. **Use type hints** for all function parameters and return values
-2. **Use PEP 604 union syntax** (X | Y) instead of Union[X, Y]
-3. **Use Optional[X]** for nullable types instead of Union[X, None]
-4. **Use Annotated** for complex types with metadata
+- Use type hints for all function parameters and return values
+- Use PEP 604 union syntax (`X | Y`) instead of `Union[X, Y]`
+- Use `Optional[X]` for nullable types
 
 ### Naming Conventions
 
-1. **Variables and functions**: snake_case
-   ```python
-   def process_document(self, filepath):
-       file_pages = []
-   ```
-
-2. **Classes**: PascalCase
-   ```python
-   class NemoparseProcessor:
-   ```
-
-3. **Constants**: UPPER_SNAKE_CASE
-   ```python
-   MAX_RETRIES = 3
-   ```
-
-4. **Private members**: Leading underscore
-   ```python
-   def _encode_image(self, image):
-   ```
-
-5. **Boolean variables**: Prefix with `is_`, `has_`, or `can_`
-   ```python
-   is_valid = True
-   has_error = False
-   ```
+- **Variables and functions**: `snake_case`
+- **Classes**: `PascalCase`
+- **Constants**: `UPPER_SNAKE_CASE`
+- **Private members**: Leading underscore (`_encode_image`)
+- **Booleans**: Prefix with `is_`, `has_`, or `can_`
 
 ### Error Handling
 
-1. **Use specific exceptions** instead of generic Exception
-2. **Provide meaningful error messages**
-3. **Use try-except blocks** for operations that might fail
-4. **Clean up resources** in finally blocks when needed
-
-```python
-try:
-    base64_encoded_data = base64.b64encode(image)
-    base64_string = base64_encoded_data.decode("utf-8")
-    return base64_string
-except Exception as e:
-    print(f"An error occurred trying to encode the document: {e}")
-    return None
-```
+Use specific exceptions instead of generic `Exception`. Provide meaningful error messages. Clean up resources in `finally` blocks when needed.
 
 ### Documentation
 
-1. **Use Google-style docstrings** for public functions and classes:
-   ```python
-   def sort_elements_by_position(self, bbox_data, width, height):
-       """
-       Sort document elements based on their spatial position.
-       
-       Args:
-           bbox_data: List of element dictionaries from API response
-           width: Page width in pixels
-           height: Page height in pixels
-           
-       Returns:
-           List of sorted element dictionaries
-       """
-   ```
-
-2. **Document complex logic** with inline comments:
-   ```python
-   # Convert normalized coordinates to absolute pixels
-   # Use top-left corner (ymin, xmin) instead of center for better reading order
-   y_top = bbox['ymin'] * height
-   x_left = bbox['xmin'] * width
-   ```
-
-### Testing
-
-1. **Write unit tests** for all new functionality
-2. **Follow the test structure** outlined in Test-plan.md
-3. **Use pytest** as the test runner
-4. **Mock external dependencies** in unit tests
-5. **Test both success and failure cases**
-
-## Project Structure
-
-```
-banyan-extract/
-├── src/
-│   └── banyan_extract/
-│       ├── __init__.py
-│       ├── cli.py
-│       ├── converter/
-│       ├── output/
-│       └── processor/
-├── tests/
-├── examples/
-└── docs/
-```
-
-## Common Patterns
-
-### Processor Pattern
-
-All processors should inherit from the base `Processor` class:
+Use Google-style docstrings:
 
 ```python
-from .processor import Processor
+def sort_elements_by_position(self, bbox_data, width, height):
+    """
+    Sort document elements based on their spatial position.
 
-class NemoparseProcessor(Processor):
-    def __init__(self, endpoint_url="", model_name="nvidia/nemoretriever-parse"):
-        super().__init__()
-        # Initialize processor-specific attributes
+    Args:
+        bbox_data: List of element dictionaries from API response
+        width: Page width in pixels
+        height: Page height in pixels
+
+    Returns:
+        List of sorted element dictionaries
+    """
 ```
 
-### Output Pattern
+## Configuration
 
-Each processor should have a corresponding output class:
+### Environment Variables
 
-```python
-class NemoparseOutput:
-    def __init__(self):
-        self.pages = []
-    
-    def add_output(self, page_data):
-        self.pages.append(page_data)
-    
-    def save_output(self, output_dir, basename):
-        # Save output files
+Create a `.env` file based on `.env.example`:
+
+```ini
+NEMOPARSE_ENDPOINT="https://your-nemotron-endpoint.com"
+NEMOPARSE_MODEL="nvidia/nemoretriever-parse"
+PPTX_NEMOTRON_ENDPOINT="https://your-pptx-endpoint.com"    # Optional
+PPTX_NEMOTRON_MODEL="nvidia/nemotron-parse"                 # Optional
 ```
 
-### CLI Integration
+### Default Configuration Values
 
-New features should be exposed through the CLI when appropriate:
+The `BanyanExtract` class has these defaults (in `banyan_extract.py`):
 
-```python
-parser.add_argument("--sort_by_position", action="store_true", default=True, 
-                   help="Sort elements by spatial position for logical reading order")
-```
+- `backend`: "auto" (auto-detects based on file extension)
+- `pptx_ocr_backend`: "nemotron" (default for PPTX files)
+- `auto_detect_rotation`: False
+- `rotation_confidence_threshold`: 0.7
+- `sort_by_position`: True
+- `overwrite`: False
+- `save_images`: False
+- `save_bbox_data`: False
+- `save_tables`: False
+- `save_page_numbers`: False
+- `return_bytes`: False
 
-## Environment Variables
+## Testing Strategy
 
-The project uses environment variables for configuration:
+### Test Organization
 
-```
-NEMOPARSE_ENDPOINT=your_endpoint_url
-NEMOPARSE_MODEL=your_model_name
+- **Unit tests**: `tests/unit/` - Test individual components in isolation
+- **Integration tests**: `tests/integration/` - Test complete workflows
+- **Test utilities**: `tests/utils.py` - Shared test fixtures and utilities
+
+### Test Markers
+
+- `@pytest.mark.unit`: Unit test
+- `@pytest.mark.integration`: Integration test
+- `@pytest.mark.slow`: Slow test
+- `@pytest.mark.external`: Requires external services
+- `@pytest.mark.meta`: Tests about tests
+
+### Test Guidelines
+
+- Write unit tests for all new functionality
+- Use pytest as the test runner
+- Mock external dependencies in unit tests
+- Test both success and failure cases
+
+## Common Development Tasks
+
+### Adding a New Processor
+
+1. Create a new processor class in `src/banyan_extract/processor/` inheriting from `Processor`
+2. Implement `process_document()` and `process_batch_documents()`
+3. Create corresponding output handler in `src/banyan_extract/output/`
+4. Update CLI to recognize and instantiate the new processor
+5. Add tests in `tests/unit/` and `tests/integration/`
+
+### Adding a New Feature
+
+1. Identify which processor(s) need the feature
+2. Add implementation to processor class
+3. Update output handler if needed
+4. Add feature flag to CLI argument parser
+5. Add feature to `BanyanExtract` wrapper class
+6. Write unit and integration tests
+
+### Debugging
+
+```bash
+python -c "import logging; logging.basicConfig(level=logging.DEBUG)"
+python -m banyan_extract input.pdf output/ --backend nemoparse 2>&1 | tee debug.log
+
+# Check dependency status
+from banyan_extract.utils.dependencies import log_dependency_status
+log_dependency_status()
 ```
 
 ## Dependencies
 
-### Required Dependencies
-- python-pptx
-- pandas
-- pdf2image
-- python-dotenv
+### Required
 
-### Optional Dependencies
-- marker-pdf (for marker backend)
-- surya-ocr (for marker backend)
-- openai (for nemotronparse backend)
+- python-pptx, pandas, pdf2image, python-dotenv
 
-## Best Practices
+### Optional (installed via extras)
 
-1. **Keep functions small** and focused on a single responsibility
-2. **Use descriptive names** for variables and functions
-3. **Handle edge cases** gracefully
-4. **Write tests first** when possible (TDD)
-5. **Follow the existing code patterns** in the codebase
-6. **Document assumptions** and limitations
-7. **Keep the code DRY** (Don't Repeat Yourself)
-8. **Write maintainable code** that others can understand
+- `nemotronparse`: openai (Nemotron OCR support)
+- `marker`: marker-pdf, surya-ocr (Surya OCR support)
+- `autorotate`: Tesseract rotation detection
 
-## Version Control
+Check dependencies at runtime:
+```python
+from banyan_extract.utils.dependencies import has_marker_dependencies, has_nemotronparse_dependencies
+```
 
-1. **Use feature branches** for new development
-2. **Write meaningful commit messages**
-3. **Keep commits small** and focused
-4. **Update documentation** when making changes
-5. **Run tests before committing**
+## Important Notes
 
-## Continuous Integration
+- **Nemotron is the default OCR backend** for PPTX processing (changed from Surya in v2.0)
+- **Rotation detection only works** with NemoparseProcessor (not Marker, PPTX, or PaperMage)
+- **re_run and temperature flags** only work with NemoparseProcessor
+- **Python requirement**: 3.10+
 
-The project uses GitHub Actions for CI/CD. Make sure:
-1. All tests pass before pushing
-2. Code follows the style guidelines
-3. Documentation is updated
-4. New features have corresponding tests
+## Version Control and CI
+
+- Use feature branches for new development
+- Write meaningful commit messages; keep commits small and focused
+- Run tests before committing
+- Update documentation when making changes
+- All tests must pass before pushing (GitHub Actions CI/CD)
+
+## Documentation
+
+Key documentation files:
+
+- `README.md`: Installation and basic usage
+- `docs/USAGE_GUIDE.md`: Comprehensive usage guide with examples
+- `docs/codebase.md`: Codebase structure and architecture
+- `docs/processor_api.md`: Processor API documentation
+- `docs/rotation_api.md`: Rotation detection API
+- `docs/troubleshooting.md`: Troubleshooting guide

@@ -37,7 +37,53 @@ class NemoparseOutput(ModelOutput):
         self.bboxdata.append(output_data.bbox_json)
         self.bbox_image.append(output_data.bbox_image)
         self.page_number_list.append(output_data.page_number)
-        
+
+    def _page_number_at(self, idx):
+        """Return the page number for the page at position idx (1-based fallback)."""
+        if idx < len(self.page_number_list) and self.page_number_list[idx] is not None:
+            return self.page_number_list[idx]
+        return idx + 1
+
+    def _build_markdown(self, img_filenames):
+        """
+        Build the markdown document with a '# <PAGE N>' header before each page.
+
+        Returns:
+            (markdown_string, line_ranges) where line_ranges[i] is a
+            (start, end) tuple of 0-based line indices for page i, with
+            start inclusive and end exclusive.
+        """
+        page_blocks = []
+        line_ranges = []
+        current_line = 0
+        img_index = 0
+        for idx, text_list in enumerate(self.text):
+            parts = [f"[//]: # <PAGE {self._page_number_at(idx)}>"]
+            for text in text_list:
+                if "![{}]({})" in text:
+                    text = text.format(f"Image {img_index}", img_filenames[img_index])
+                    img_index += 1
+                parts.append(text)
+            block = "\n\n".join(parts)
+            page_blocks.append(block)
+
+            block_lines = block.count("\n") + 1
+            line_ranges.append((current_line, current_line + block_lines))
+            # Account for the blank line separating this page from the next
+            current_line += block_lines + 1
+
+        markdown = "\n\n".join(page_blocks)
+        if markdown:
+            markdown += "\n"
+        return markdown, line_ranges
+
+    def _build_bbox_pages(self):
+        """Return bbox data grouped by page: [{"page": N, "content": [...]}, ...]."""
+        return [
+            {"page": self._page_number_at(idx), "content": bboxdata}
+            for idx, bboxdata in enumerate(self.bboxdata)
+        ]
+
     @classmethod
     def get_output_path(cls, output_directory, filename_base):
         return os.path.join(output_directory, f"{filename_base}.md")
@@ -62,8 +108,8 @@ class NemoparseOutput(ModelOutput):
             with open(
                 os.path.join(output_directory, f"{filename_base}_bbox.json"),
                 "w+") as f:
-                for bboxdata in self.bboxdata:
-                    f.write(json.dumps(bboxdata, indent=2))
+                json.dump(self._build_bbox_pages(), f, indent=4)
+                f.write("\n")
 
             for index, bbox_image in enumerate(self.bbox_image):
                 bbox_image.save(os.path.join(output_directory, f"{filename_base}_bbox_image_{index}.png"))
@@ -82,39 +128,19 @@ class NemoparseOutput(ModelOutput):
 
                     table_index += 1
 
-        # Track line numbers for each text output 
-        line_ranges = [0]
-
         # Write final markdown output
+        markdown, line_ranges = self._build_markdown(img_filenames)
         with open(
             os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
-            img_index = 0
-            for idx, text_list in enumerate(self.text):
-                line_count = 0
-                for text in text_list:
-                    if "![{}]({})" in text:
-                        text = text.format(f"Image {img_index}", img_filenames[img_index])
-                        img_index += 1
-                    f.write(text + "\n\n")
-                    line_count += len(text.split("\n")) + 1
-                    #print(text)
-
-                f.write("\n")
-                
-                prev_line_count = line_ranges[idx]
-                line_ranges.append(line_count + prev_line_count + 1)
+            f.write(markdown)
 
         if save_page_numbers:
             with open(
                 os.path.join(output_directory, f"{filename_base}.metadata"), "w") as f:
                 f.write("Page_Number,Markdown_Lines\n")
-                for idx in range(len(self.text)):
-                    text_start = line_ranges[idx]
-                    text_end = line_ranges[idx+1]
-                    page_num = self.page_number_list[idx]
-                    row = f"{page_num},{text_start}-{text_end}\n"
-                    f.write(row)
-                #f.write("\n")
+                for idx, (text_start, text_end) in enumerate(line_ranges):
+                    page_num = self._page_number_at(idx)
+                    f.write(f"{page_num},{text_start}-{text_end}\n")
 
     def return_bytes(self, output_directory, filename_base, save_images=False,
                      save_bbox_data=False, save_tables=False, save_page_numbers=False):
@@ -142,9 +168,7 @@ class NemoparseOutput(ModelOutput):
 
         if save_bbox_data:
 
-            bbox_summary_string = ""
-            for bboxdata in self.bboxdata:
-                bbox_summary_string += json.dumps(bboxdata, indent=2) + "\n"
+            bbox_summary_string = json.dumps(self._build_bbox_pages(), indent=4) + "\n"
 
             bbox_summary = bbox_summary_string.encode(encoding)
             bytes_return_dict["bbox_summary"] = bbox_summary
@@ -189,48 +213,14 @@ class NemoparseOutput(ModelOutput):
 
             bytes_return_dict["tables"] = table_bytes_list
 
-        # Track line numbers for each text output 
-        line_ranges = [0]
-
-        # Write final markdown output
-        #with open(
-        #    os.path.join(output_directory, f"{filename_base}.md"), "w+") as f:
-        img_index = 0
-        raw_markdown_string = ""
-        for idx, text_list in enumerate(self.text):
-            line_count = 0
-            for text in text_list:
-                if ("![{}]({})" in text):
-                    text = text.format(f"Image {img_index}", img_filenames[img_index])
-                    img_index += 1
-                #f.write(text + "\n\n")
-                raw_markdown_string += text + "\n\n"
-                line_count += len(text.split("\n")) + 1
-                #print(text)
-
-            #f.write("\n")
-            raw_markdown_string += "\n"
-
-            prev_line_count = line_ranges[idx]
-            line_ranges.append(line_count + prev_line_count + 1)
-                    
-
+        raw_markdown_string, line_ranges = self._build_markdown(img_filenames)
         bytes_return_dict["markdown"] = raw_markdown_string.encode(encoding)
 
         if save_page_numbers:
-            #with open(
-            #    os.path.join(output_directory, f"{filename_base}.metadata"), "w") as f:
-            #    f.write("Page_Number,Markdown_Lines\n")
-            page_number_lines_list = []
-            for idx in range(len(self.text)):
-                text_start = line_ranges[idx]
-                text_end = line_ranges[idx+1]
-                page_num = self.page_number_list[idx]
-                #row = f"{page_num},{text_start}-{text_end}\n"
-                #f.write(row)
-                page_number_lines_list.append( (page_num, (text_start, text_end))  )
-                
-            bytes_return_dict["page_number_lines"] = page_number_lines_list
+            bytes_return_dict["page_number_lines"] = [
+                (self._page_number_at(idx), line_range)
+                for idx, line_range in enumerate(line_ranges)
+            ]
 
         return bytes_return_dict
             
@@ -259,7 +249,7 @@ class NemoparseOutput(ModelOutput):
             cleaned_data = []
             for bboxdata in self.bboxdata:
                 tmp_data = []
-                for entry in data:
+                for entry in bboxdata:
                     tmp_entry = {}
                     for key in entry:
                         if key != "bbox":
@@ -269,19 +259,13 @@ class NemoparseOutput(ModelOutput):
             return json.dumps(cleaned_data)
 
     def get_output_as_markdown(self):
-        full_text = ""
-
-        img_index = 0
-        for page_number, page_text in enumerate(self.text):
-            full_text += f"# Page {page_number}\n"
-            for text in page_text:
-                if "![{}]({})" in text:
-                    text = text.format(f"Image {img_index}", f"image_{img_index}.png")
-                    img_index += 1
-                full_text += text
-            full_text += "\n"
-
-        return full_text
+        num_images = sum(len(image_list) for image_list in self.images)
+        num_placeholders = sum(
+            1 for text_list in self.text for text in text_list if "![{}]({})" in text
+        )
+        img_filenames = [f"image_{i}.png" for i in range(max(num_images, num_placeholders))]
+        markdown, _ = self._build_markdown(img_filenames)
+        return markdown
 
     def get_content_list(self):
         content = []

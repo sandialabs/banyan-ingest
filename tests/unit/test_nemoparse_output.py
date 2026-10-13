@@ -178,3 +178,76 @@ class TestNemoparseOutputEdgeCases:
         assert len(output.text) == 5
         assert len(output.bboxdata) == 5
         assert len(output.bbox_image) == 5
+
+
+def _two_page_output():
+    bbox = {"xmin": 0.0918, "ymin": 0.0383, "xmax": 0.8965, "ymax": 0.0523}
+    output = NemoparseOutput()
+    output.add_output(NemoparseData(
+        text=["Page one content goes here", "Here is some more *text*"],
+        bbox_json=[{"type": "Text", "text": "Page 1 text", "bbox": bbox}],
+        images=[], tables=[],
+        bbox_image=Image.new('RGB', (10, 10), color='white'),
+        page_number=1,
+    ))
+    output.add_output(NemoparseData(
+        text=["Here is the second page."],
+        bbox_json=[{"type": "Text", "text": "Page 2 text", "bbox": bbox}],
+        images=[], tables=[],
+        bbox_image=Image.new('RGB', (10, 10), color='white'),
+        page_number=2,
+    ))
+    return output
+
+
+EXPECTED_PAGED_MARKDOWN = (
+    "[//]: # <PAGE 1>\n\n"
+    "Page one content goes here\n\n"
+    "Here is some more *text*\n\n"
+    "[//]: # <PAGE 2>\n\n"
+    "Here is the second page.\n"
+)
+
+
+@pytest.mark.requires_nemotronparse
+class TestNemoparseOutputPageFormat:
+    """Verify page-separated markdown and page-grouped bbox output."""
+
+    def test_markdown_has_page_headers(self, tmp_path):
+        output = _two_page_output()
+        output.save_output(str(tmp_path), "doc")
+        assert (tmp_path / "doc.md").read_text() == EXPECTED_PAGED_MARKDOWN
+
+    def test_return_bytes_markdown_matches_saved(self, tmp_path):
+        output = _two_page_output()
+        result = output.return_bytes(str(tmp_path), "doc")
+        assert result["markdown"].decode("utf-8") == EXPECTED_PAGED_MARKDOWN
+
+    def test_get_output_as_markdown_has_page_headers(self):
+        assert _two_page_output().get_output_as_markdown() == EXPECTED_PAGED_MARKDOWN
+
+    def test_bbox_json_grouped_by_page(self, tmp_path):
+        output = _two_page_output()
+        output.save_output(str(tmp_path), "doc", save_bbox_data=True)
+        data = json.loads((tmp_path / "doc_bbox.json").read_text())
+        assert [page["page"] for page in data] == [1, 2]
+        assert data[0]["content"][0]["text"] == "Page 1 text"
+        assert data[1]["content"][0]["text"] == "Page 2 text"
+
+    def test_return_bytes_bbox_summary_grouped_by_page(self, tmp_path):
+        output = _two_page_output()
+        result = output.return_bytes(str(tmp_path), "doc", save_bbox_data=True)
+        data = json.loads(result["bbox_summary"].decode("utf-8"))
+        assert [page["page"] for page in data] == [1, 2]
+
+    def test_page_number_line_ranges(self, tmp_path):
+        output = _two_page_output()
+        result = output.return_bytes(str(tmp_path), "doc", save_page_numbers=True)
+        lines = result["markdown"].decode("utf-8").split("\n")
+        for page_num, (start, _end) in result["page_number_lines"]:
+            assert lines[start] == f"[//]: # <PAGE {page_num}>"
+        assert result["page_number_lines"] == [(1, (0, 5)), (2, (6, 9))]
+
+    def test_get_output_as_json_without_bbox(self):
+        data = json.loads(_two_page_output().get_output_as_json(with_bbox_data=False))
+        assert all("bbox" not in entry for page in data for entry in page)

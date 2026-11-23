@@ -1,9 +1,8 @@
 import argparse
 import os
 
-from dotenv import load_dotenv, dotenv_values
-
-from banyan_extract import NemoparseProcessor 
+from banyan_extract import NemoparseProcessor
+from banyan_extract.utils import get_nemoparse_config
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -23,18 +22,17 @@ if __name__ == '__main__':
 
     output_directory = args.output_dir
     output_base = args.output_base
-    endpoint = args.endpoint
-    model_name = args.model_name
+    config = get_nemoparse_config()
+    endpoint = args.endpoint or config["NEMOPARSE_ENDPOINT"]
+    model_name = args.model_name or config["NEMOPARSE_MODEL"] or ""
+    api_key = os.getenv("NEMOPARSE_API_KEY")
+    if endpoint == config["NEMOPARSE_ENDPOINT"]:
+        api_key = config["NEMOPARSE_API_KEY"]
 
-    if len(endpoint) == 0:
-        config_values = dotenv_values(".env")
-        endpoint = config_values["NEMOPARSE_ENDPOINT"]
-        model_name = config_values["NEMOPARSE_MODEL"]
-        print(f"Using endpoint: {endpoint}")
-        print(f"Using model: {model_name}")
-
-    if endpoint != "":
-        document_processor = NemoparseProcessor(endpoint_url=endpoint, model_name=model_name, sort_by_position=True)
+    if endpoint:
+        document_processor = NemoparseProcessor(
+            endpoint_url=endpoint, model_name=model_name, sort_by_position=True, api_key=api_key,
+        )
 
         if args.is_input_dir:
             input_directory = args.input_file

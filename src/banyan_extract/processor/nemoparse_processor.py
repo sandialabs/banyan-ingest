@@ -35,7 +35,8 @@ class NemoparseProcessor(Processor):
                  column_detection_mode="auto",
                  column_gap_threshold=0.15,
                  output_dir="./",
-                 model_version=ModelVersion.LATEST):
+                 model_version=ModelVersion.LATEST,
+                 api_key: str | None = None):
         """
         Initialize NemoparseProcessor with column detection configuration.
 
@@ -49,12 +50,14 @@ class NemoparseProcessor(Processor):
             column_gap_threshold: Minimum normalized gap (0.0-1.0) to detect column boundary (default: 0.15)
             output_dir: Output directory for processed files
             model_version: Nemotron model version
+            api_key: Optional bearer credential for the configured endpoint
         """
         super().__init__()
         self.nemotron_ocr = NemotronOCR(
             endpoint_url=endpoint_url,
             model_name=model_name,
-            model_version=model_version
+            model_version=model_version,
+            api_key=api_key,
         )
         self.sort_by_position = sort_by_position
         self.column_detection_mode = column_detection_mode
@@ -470,6 +473,7 @@ class NemoparseProcessor(Processor):
         Returns:
             List of NemoparseOutput objects if use_checkpointing=False, else empty list
         """        
+        self.nemotron_ocr.validate_sampling(temperature, re_run)
         # Log batch processing information
         logger.info(f"Processing batch of {len(filepaths)} documents")
         if auto_detect_rotation:
@@ -564,6 +568,7 @@ class NemoparseProcessor(Processor):
         if auto_detect_rotation and normalized_angle != 0:
             logger.warning("Both manual rotation and auto-detection are enabled. Manual rotation will take precedence.")
 
+        self.nemotron_ocr.validate_sampling(temperature, re_run)
         # Basic check of file type and get pages
         try:
             file_pages = self.get_pages(filepath)

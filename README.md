@@ -62,7 +62,7 @@ pip install .[marker]
 ```
 
 ## Supported Tools and File Formats
-Currently we provide support for `marker` ([link here](https://github.com/datalab-to/marker)) and NVIDIA's `nemotron-parse` models ([link here](https://build.nvidia.com/nvidia/nemotron-parse)).
+Currently we provide support for [Marker](https://github.com/datalab-to/marker) and NVIDIA's [Nemotron Parse](https://build.nvidia.com/nvidia/nemotron-3.5-parse) models.
 
 To install the necessary dependencies for these tools please use `pip install .[marker]` or `pip install .[nemotronparse]` respectively.
 
@@ -71,7 +71,14 @@ To install the necessary dependencies for these tools please use `pip install .[
 Note: please ensure you follow the guidelines and usage licenses of the tools.
 
 ### Using Nemotron-parse
-Copy the `.env.example` file change `NEMOTRON_ENDPOINT` to the endpoint of the Nemotron-parse model you want to use.
+For NVIDIA's free hosted Nemotron 3.5 Parse endpoint, click **Get API Key**
+on the [NVIDIA model page](https://build.nvidia.com/nvidia/nemotron-3.5-parse)
+and sign in or create a free developer account. Copy `.env.example` to
+`.env` and set `NEMOPARSE_API_KEY` in that local file or in your shell.
+
+For a self-hosted OpenAI-compatible deployment, set `NEMOPARSE_ENDPOINT` to
+its base URL and `NEMOPARSE_MODEL` to its served model ID. See the
+[Nemotron endpoint guide](docs/nemotron_parse_api.md) for both configurations.
 
 ## Features
 

@@ -123,9 +123,9 @@ class TestNemoparseOutputExampleBased:
         expected_files = [
             "multi_page_doc.md",
             "multi_page_doc_bbox.json",
-            "multi_page_doc_bbox_image_0.png",
-            "multi_page_doc_bbox_image_1.png",
-            "multi_page_doc_bbox_image_2.png",
+            "multi_page_doc_bbox_outlines_page_1.png",
+            "multi_page_doc_bbox_outlines_page_2.png",
+            "multi_page_doc_bbox_outlines_page_3.png",
             "multi_page_doc_image_0.png",
             "multi_page_doc_image_1.png",
             "multi_page_doc_image_2.png",

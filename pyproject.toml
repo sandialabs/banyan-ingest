@@ -19,6 +19,7 @@ dependencies = [
     "opencv-contrib-python-headless",
     "numpy",
     "openai",
+    "httpx",
     "pillow",
     "pymupdf",
     "tqdm",

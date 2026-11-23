@@ -95,7 +95,7 @@ class TestNemoparseProcessorIntegration:
         expected_files = [
             f"{base_name}.md",
             f"{base_name}_bbox.json",
-            f"{base_name}_bbox_image_0.png"
+            f"{base_name}_bbox_outlines_page_1.png"
         ]
         
         for expected_file in expected_files:
@@ -186,9 +186,9 @@ class TestNemoparseProcessorIntegration:
         expected_files = [
             f"{base_name}.md",
             f"{base_name}_bbox.json",
-            f"{base_name}_bbox_image_0.png",
-            f"{base_name}_bbox_image_1.png",
-            f"{base_name}_bbox_image_2.png"
+            f"{base_name}_bbox_outlines_page_1.png",
+            f"{base_name}_bbox_outlines_page_2.png",
+            f"{base_name}_bbox_outlines_page_3.png"
         ]
         
         for expected_file in expected_files:
@@ -380,7 +380,7 @@ class TestNemoparseProcessorIntegration:
             expected_files = [
                 f"{doc_id}.pdf.md",
                 f"{doc_id}.pdf_bbox.json",
-                f"{doc_id}.pdf_bbox_image_0.png"
+                f"{doc_id}.pdf_bbox_outlines_page_1.png"
             ]
             
             for expected_file in expected_files:

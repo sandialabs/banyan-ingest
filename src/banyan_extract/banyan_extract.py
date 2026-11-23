@@ -9,6 +9,7 @@ from dotenv import load_dotenv, dotenv_values
 from pathlib import Path
 
 from banyan_extract.ocr import ModelVersion
+from banyan_extract.ocr.nemotron_ocr import is_parse_endpoint
 from banyan_extract.utils import gather_files, get_nemoparse_config 
 from banyan_extract.utils.logging_config import get_logger
 from banyan_extract.converter.libreoffice_converter import LibreOfficeConverter
@@ -193,6 +194,7 @@ class BanyanExtract:
         model_name = self.model_name
         model_version = self.model_version
         backend = self.backend
+        api_key = os.getenv("NEMOPARSE_API_KEY")
  
         self.input_file = str(self.input_file)
 
@@ -227,14 +229,17 @@ class BanyanExtract:
                 if backend != "nemoparse" and (self.re_run or self.temperature != 0.0):
                     raise ValueError(f"Error: The --re_run and --temperature flags are not supported for {backend} processing (detected from {filename}).")
 
-        if len(endpoint) == 0:
+        if not endpoint:
             config_values = get_nemoparse_config(self.config_file)
-    
-            if not config_values or config_values["NEMOPARSE_ENDPOINT"] is None or config_values["NEMOPARSE_MODEL"] is None:
-                raise ValueError(f"Config file {self.config_file} not found or empty and environment variables (NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL) not set")
-    
-            endpoint = config_values.get("NEMOPARSE_ENDPOINT")
-            model_name = config_values.get("NEMOPARSE_MODEL")
+            endpoint = config_values.get("NEMOPARSE_ENDPOINT") or ""
+            model_name = config_values.get("NEMOPARSE_MODEL") or model_name
+            if not endpoint or (not model_name and not is_parse_endpoint(endpoint)):
+                raise ValueError(
+                    f"Config file {self.config_file} or the environment must set "
+                    "NEMOPARSE_ENDPOINT and NEMOPARSE_MODEL. "
+                    "NEMOPARSE_MODEL is optional for a full /parse endpoint."
+                )
+            api_key = config_values.get("NEMOPARSE_API_KEY") or api_key
             model_version = config_values.get("NEMOPARSE_MODEL_VERSION")
             if endpoint:
                 self.logger.info(f"Using endpoint: {endpoint}")
@@ -242,6 +247,34 @@ class BanyanExtract:
                 self.logger.info(f"Using model: {model_name}")
             if model_version:
                 self.logger.info(f"Using model version: {model_version}")
+
+        pptx_endpoint = self.pptx_nemotron_endpoint or endpoint
+        pptx_settings = {
+            "ocr_backend": self.pptx_ocr_backend,
+            "nemotron_endpoint": pptx_endpoint,
+            "nemotron_model": self.pptx_nemotron_model or model_name,
+            "output_dir": output_directory,
+            "nemotron_api_key": api_key if pptx_endpoint == endpoint else None,
+        }
+        rotation_settings = {
+            "rotation_angle": self.rotation_angle,
+            "auto_detect_rotation": self.auto_detect_rotation,
+            "rotation_confidence_threshold": self.rotation_confidence_threshold,
+        }
+        parse_settings = {
+            **rotation_settings,
+            "draw_bboxes": self.draw_bboxes,
+            "re_run": self.re_run,
+            "temperature": self.temperature,
+            "apply_highcontrast_filter": self.apply_contrast_filter,
+            "overwrite": self.overwrite,
+        }
+        save_settings = {
+            "save_images": self.save_images,
+            "save_bbox_data": self.save_bbox_data,
+            "save_tables": self.save_tables,
+            "save_page_numbers": self.save_page_numbers,
+        }
 
         # Initialize the appropriate processor
         document_processor = None
@@ -255,6 +288,7 @@ class BanyanExtract:
                     column_gap_threshold=self.column_gap_threshold,
                     output_dir=output_directory,
                     model_version=self.model_version,
+                    api_key=api_key,
                 )
             else:
                 raise ValueError("Missing nemotron-parse endpoint URL!")
@@ -267,12 +301,7 @@ class BanyanExtract:
                 raise ImportError("MarkerProcessor not available. Install marker dependencies with: pip install .[marker]") from e
         elif backend == "pptx":
             try:
-                document_processor = PptxProcessor(
-                    ocr_backend=self.pptx_ocr_backend,
-                    nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
-                    nemotron_model=self.pptx_nemotron_model or self.model_name,
-                    output_dir=output_directory,
-                )
+                document_processor = PptxProcessor(**pptx_settings)
             except NameError as e:
                 self.logger.error("PptxProcessor not available. PPTX processing requires additional dependencies.")
                 self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
@@ -310,24 +339,12 @@ class BanyanExtract:
                 for filepath, basename, relative_path in zip(filepaths, basenames, relative_paths):
                     try:
                         # Determine processor based on file extension
-                        if filepath.lower().endswith('.pptx') and not self.enable_conversion:
+                        is_pptx = filepath.lower().endswith(".pptx") and not self.enable_conversion
+                        if is_pptx:
                             if self.re_run or self.temperature != 0.0:
                                 self.logger.warning(f"WARNING: The --re_run and --temperature flags are not supported for PPTX files. Cannot process {filepath}.")
-                                try:
-                                    processor = PptxProcessor(
-                                        ocr_backend=self.pptx_ocr_backend,
-                                        nemotron_endpoint=self.pptx_nemotron_endpoint or self.endpoint,
-                                        nemotron_model=self.pptx_nemotron_model or self.model_name,
-                                        output_dir=output_directory,
-                                    )
-                                except (NameError, ImportError) as e:
-                                    self.logger.error(f"Failed to initialize PptxProcessor for file {filepath}: {e}")
-                                    self.logger.warning("To enable PPTX functionality, install with: pip install python-pptx")
-                                    if self.pptx_ocr_backend == "nemotron":
-                                        self.logger.warning("For Nemotron OCR support, install with: pip install .[nemotronparse]")
-                                    elif self.pptx_ocr_backend == "surya":
-                                        self.logger.warning("For Surya OCR support, install with: pip install .[marker]")
-                                    raise ImportError(f"PPTX processing dependencies are missing for file {filepath}") from e
+                                continue
+                            processor = PptxProcessor(**pptx_settings)
                         else:  # Default to nemoparse for PDF and other files
                             if endpoint != "":
                                 processor = NemoparseProcessor(
@@ -338,6 +355,7 @@ class BanyanExtract:
                                     column_gap_threshold=self.column_gap_threshold,
                                     output_dir=output_directory,
                                     model_version=self.model_version,
+                                    api_key=api_key,
                                 )
                             else:
                                 raise ValueError("Missing nemotron-parse endpoint URL!")
@@ -346,18 +364,8 @@ class BanyanExtract:
                         actual_filepath = self.convert_file(filepath)
 
                         # Process single file
-                        output = processor.process_document(
-                            actual_filepath,
-                            draw_bboxes=self.draw_bboxes,
-                            re_run=self.re_run,
-                            temperature=self.temperature,
-                            rotation_angle=self.rotation_angle,
-                            auto_detect_rotation=self.auto_detect_rotation,
-                            rotation_confidence_threshold=self.rotation_confidence_threshold,
-                            apply_highcontrast_filter=self.apply_contrast_filter,
-                            overwrite=self.overwrite,
-                            output_basename=basename,
-                        )
+                        settings = rotation_settings if is_pptx else dict(parse_settings, output_basename=basename)
+                        output = processor.process_document(actual_filepath, **settings)
 
                         if output is not None:
                             if self.return_bytes:
@@ -370,7 +378,9 @@ class BanyanExtract:
                                     os.makedirs(output_parent_dir, exist_ok=True)
                                 else:
                                     output_parent_dir = output_directory
-                                output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                output.save_output(
+                                    output_parent_dir, basename, **({} if is_pptx else save_settings),
+                                )
 
                         processed_count += 1
                         if processed_count > 10 and self.converter:
@@ -387,23 +397,16 @@ class BanyanExtract:
                 # Use the selected processor for all files
                 try:
                     actual_filepaths = [self.convert_file(path) for path in filepaths]
-                    outputs = document_processor.process_batch_documents(
-                        actual_filepaths, 
-                        output_dir=output_directory, 
-                        use_checkpointing=self.checkpointing, 
-                        draw_bboxes=self.draw_bboxes,
-                        re_run=self.re_run,
-                        temperature=self.temperature,
-                        rotation_angle=self.rotation_angle,
-                        auto_detect_rotation=self.auto_detect_rotation,
-                        rotation_confidence_threshold=self.rotation_confidence_threshold,
-                        apply_highcontrast_filter=self.apply_contrast_filter,
-                        overwrite=self.overwrite,
+                    settings = rotation_settings if backend == "pptx" else dict(
+                        parse_settings,
+                        output_dir=output_directory,
+                        use_checkpointing=self.checkpointing,
                         output_basenames=basenames,
                         save_images=self.save_images,
                         save_bbox_data=self.save_bbox_data,
                         save_tables=self.save_tables,
                     )
+                    outputs = document_processor.process_batch_documents(actual_filepaths, **settings)
                     file_count = 0
                     for file_output, basename, relative_path in zip(outputs, basenames, relative_paths):
                         
@@ -419,7 +422,9 @@ class BanyanExtract:
                                     os.makedirs(output_parent_dir, exist_ok=True)
                                 else:
                                     output_parent_dir = output_directory
-                                file_output.save_output(output_parent_dir, basename, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                                file_output.save_output(
+                                    output_parent_dir, basename, **({} if backend == "pptx" else save_settings),
+                                )
                     self.logger.info(f"Processed {file_count} documents")
                 except Exception as e:
                     self.logger.error(f"Failed to process batch: {e}")
@@ -427,24 +432,16 @@ class BanyanExtract:
         else:
             try:
                 actual_file_path = self.convert_file(self.input_file)
-                output = document_processor.process_document(
-                    actual_file_path, 
-                    draw_bboxes=self.draw_bboxes,
-                    re_run=self.re_run,
-                    temperature=self.temperature,
-                    rotation_angle=self.rotation_angle,
-                    auto_detect_rotation=self.auto_detect_rotation,
-                    rotation_confidence_threshold=self.rotation_confidence_threshold,
-                    apply_highcontrast_filter=self.apply_contrast_filter,
-                    overwrite=self.overwrite,
-                    output_basename=output_base,
-                )
+                settings = rotation_settings if backend == "pptx" else dict(parse_settings, output_basename=output_base)
+                output = document_processor.process_document(actual_file_path, **settings)
                 if output is not None:
                     if self.return_bytes:
                         output_bytes = output.return_bytes(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
                         bytes_data_list.append( (self.input_file, output_bytes) )
                     else:
-                        output.save_output(output_directory, output_base, save_images=self.save_images, save_bbox_data=self.save_bbox_data, save_tables=self.save_tables, save_page_numbers=self.save_page_numbers)
+                        output.save_output(
+                            output_directory, output_base, **({} if backend == "pptx" else save_settings),
+                        )
             except Exception as e:
                 self.logger.error(f"Failed to process document {self.input_file}: {e}")
                 raise

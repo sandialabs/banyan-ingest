@@ -105,7 +105,7 @@ class NemoparseOutput(ModelOutput):
                     except Exception as e:
                         print(f"An error occurred trying to save the image: {img_filename}: {e}")
 
-                img_index += 1
+                global_img_index += 1
                 img_filenames.append(img_filename)
 
         if save_bbox_data:

@@ -1,12 +1,14 @@
 import base64
 import io
 import json
+import os
 import re
-import csv
+from enum import Enum
+from urllib.parse import urlsplit
 
+import httpx
 from openai import OpenAI
 from PIL import Image
-from enum import Enum
 
 
 class ModelVersion(Enum):
@@ -40,30 +42,82 @@ def extract_bbox_data_from_response(text: str):
     return bbox_data
 
 
+def is_parse_endpoint(endpoint_url: str) -> bool:
+    """Identify a complete document Parse API URL by its final path segment."""
+    return urlsplit(endpoint_url).path.rstrip("/").endswith("/parse")
+
+
 class NemotronOCR:
     """
     Wrapper class for Nemotron parse OCR functionality.
     Provides unified interface for OCR operations using Nemotron parse endpoint.
     """
 
-    def __init__(self, endpoint_url="", model_name="nvidia/NVIDIA-Nemotron-Parse-v1.2", model_version=ModelVersion.LATEST):
-        #"nvidia/nemoretriever-parse"):
+    def __init__(
+        self,
+        endpoint_url: str = "",
+        model_name: str = "nvidia/NVIDIA-Nemotron-Parse-v1.2",
+        model_version: ModelVersion = ModelVersion.LATEST,
+        api_key: str | None = None,
+    ) -> None:
         """
         Initialize Nemotron OCR client.
         
         Args:
-            endpoint_url: URL for Nemotron parse endpoint
-            model_name: Model name to use for OCR
+            endpoint_url: Complete Parse API URL or OpenAI-compatible base URL.
+            model_name: Model identifier for OpenAI-compatible deployments.
+            model_version: Response format for OpenAI-compatible deployments.
+            api_key: Optional bearer credential for the configured endpoint.
         """
         self.model_url = endpoint_url
-        self.client = OpenAI(
-            base_url=self.model_url,
-            api_key="non-empty"  # Required but not used for local deployments
-        )
         self.model = model_name
         self.model_version = model_version
+        self.uses_parse_api = is_parse_endpoint(endpoint_url)
+        if self.uses_parse_api and urlsplit(endpoint_url).hostname == "ai.api.nvidia.com":
+            api_key = api_key or os.getenv("NEMOPARSE_API_KEY")
+            if not api_key:
+                raise ValueError("Set NEMOPARSE_API_KEY to use the NVIDIA-hosted Parse API.")
+        self.api_key = api_key
+        self.client = None if self.uses_parse_api else OpenAI(base_url=endpoint_url, api_key=api_key or "non-empty")
 
-    def _get_response(self, base64_image: str, temperature: float = 0.0):
+    def validate_sampling(self, temperature: float, re_run: bool = False) -> None:
+        """Reject sampling controls that the document Parse API cannot apply."""
+        if self.uses_parse_api and (temperature != 0.0 or re_run):
+            raise ValueError("The Parse API does not support --temperature or --re_run.")
+
+    def _parse_document(self, base64_image: str) -> list[dict]:
+        _, separator, payload = base64_image.partition(";base64,")
+        if not separator:
+            raise ValueError("The Parse API needs a base64 data URL for one page image.")
+        image_bytes = base64.b64decode(payload, validate=True)
+        # The caller may label raw JPEG or TIFF bytes as PNG. Use the real format.
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            if image.format == "JPEG":
+                document = ("page.jpg", image_bytes, "image/jpeg")
+            else:
+                if image.format != "PNG":
+                    png = io.BytesIO()
+                    image.convert("RGB").save(png, format="PNG")
+                    image_bytes = png.getvalue()
+                document = ("page.png", image_bytes, "image/png")
+
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        response = httpx.post(self.model_url, headers=headers, files={"document": document}, timeout=120.0)
+        response.raise_for_status()
+        result = response.json()
+        if not isinstance(result, dict) or not isinstance(result.get("content"), str):
+            raise ValueError("The Parse API response is missing text content.")
+        if result.get("finish_reason") == "length":
+            raise ValueError("The Parse API hit its output token limit. Try a smaller page crop.")
+        return extract_bbox_data_from_response(result["content"])
+
+    def _get_response(self, base64_image: str, temperature: float = 0.0) -> list[dict]:
+        if self.uses_parse_api:
+            self.validate_sampling(temperature)
+            return self._parse_document(base64_image)
+
         content = []
         tools = []
         extra_body = {}

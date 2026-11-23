@@ -39,7 +39,7 @@ class TestNemoparseOutputIntegration:
         output = NemoparseOutput()
         
         # Add multiple pages of sample data (simulating real processing)
-        for page_num in range(3):
+        for page_num in range(1, 4):
             # Create sample image for this page
             img = Image.new('RGB', (200, 150), color='lightgray')
             
@@ -75,9 +75,9 @@ class TestNemoparseOutputIntegration:
         expected_files = [
             f"{base_name}.md",
             f"{base_name}_bbox.json",
-            f"{base_name}_bbox_image_0.png",
-            f"{base_name}_bbox_image_1.png",
-            f"{base_name}_bbox_image_2.png",
+            f"{base_name}_bbox_outlines_page_1.png",
+            f"{base_name}_bbox_outlines_page_2.png",
+            f"{base_name}_bbox_outlines_page_3.png",
             f"{base_name}_image_0.png",
             f"{base_name}_image_1.png", 
             f"{base_name}_image_2.png",

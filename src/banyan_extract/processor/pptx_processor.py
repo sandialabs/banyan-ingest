@@ -23,7 +23,14 @@ from ..ocr.nemotron_ocr import NemotronOCR
 
 class PptxProcessor(Processor):
     
-    def __init__(self, ocr_backend="nemotron", nemotron_endpoint="", nemotron_model="nvidia/nemoretriever-parse", output_dir=None):
+    def __init__(
+        self,
+        ocr_backend="nemotron",
+        nemotron_endpoint="",
+        nemotron_model="nvidia/nemoretriever-parse",
+        output_dir=None,
+        nemotron_api_key: str | None = None,
+    ):
         """
         Initialize PPTX processor with OCR backend selection.
         
@@ -31,6 +38,7 @@ class PptxProcessor(Processor):
             ocr_backend: Which OCR backend to use ('surya' or 'nemotron'). Default is 'nemotron'.
             nemotron_endpoint: URL for Nemotron parse endpoint (if using nemotron)
             nemotron_model: Model name for Nemotron OCR
+            nemotron_api_key: Optional bearer credential for the Nemotron endpoint
         """
         super().__init__()
         self.ocr_backend = None  # Single member variable for OCR backend
@@ -42,7 +50,8 @@ class PptxProcessor(Processor):
             try:
                 self.ocr_backend = NemotronOCR(
                     endpoint_url=nemotron_endpoint,
-                    model_name=nemotron_model
+                    model_name=nemotron_model,
+                    api_key=nemotron_api_key,
                 )
                 self.ocr_available = True
                 logger.debug("Nemotron OCR initialized successfully")
